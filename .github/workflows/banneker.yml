@@ -1,0 +1,100 @@
+name: Banneker Analysis
+
+on:
+  # Manual trigger with target repo input
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: "GitHub repo to analyze (owner/repo)"
+        required: true
+        example: "openstack/octavia"
+      target_ref:
+        description: "Branch or tag to analyze"
+        required: false
+        default: "main"
+      steps:
+        description: "Steps to run (comma-separated)"
+        required: false
+        default: "document,architect"
+
+  # Auto-trigger: run when this repo itself changes (for testing)
+  push:
+    branches: [main, master]
+    paths:
+      - "banneker-pipeline.sh"
+      - ".github/workflows/banneker.yml"
+
+env:
+  OPENCODE_MODEL: "anthropic/claude-sonnet-4-20250514"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Banneker
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install opencode
+        run: npm install -g opencode
+
+      - name: Determine target
+        id: target
+        run: |
+          if [[ -n "${{ github.event.inputs.target_repo }}" ]]; then
+            echo "repo=${{ github.event.inputs.target_repo }}" >> "$GITHUB_OUTPUT"
+            echo "ref=${{ github.event.inputs.target_ref }}" >> "$GITHUB_OUTPUT"
+            echo "steps=${{ github.event.inputs.steps }}" >> "$GITHUB_OUTPUT"
+          else
+            # Default: analyze a specific repo (change this to your target)
+            echo "repo=openstack/octavia" >> "$GITHUB_OUTPUT"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+            echo "steps=document,architect" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clone target repository
+        run: |
+          git clone --depth 1 --branch "${{ steps.target.outputs.ref }}" \
+            "https://github.com/${{ steps.target.outputs.repo }}.git" \
+            /tmp/target-repo
+
+      - name: Run Banneker pipeline
+        env:
+          TARGET_DIR: /tmp/target-repo
+          BANNEKER_STEPS: ${{ steps.target.outputs.steps }}
+          SKIP_COMMIT: "true"   # We'll handle commit separately
+        run: ./banneker-pipeline.sh
+
+      - name: Commit results back
+        run: |
+          cd /tmp/target-repo
+          if git diff --quiet .banneker/ 2>/dev/null && \
+             [[ -z "$(git ls-files --others --exclude-standard .banneker/ 2>/dev/null)" ]]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.email "banneker-bot[bot]@users.noreply.github.com"
+          git config user.name "banneker-bot"
+
+          BRANCH="banneker/auto-docs"
+          git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+          git add .banneker/
+          git commit -m "banneker: update analysis $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # Push using a token with repo access
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ steps.target.outputs.repo }}.git" "$BRANCH"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: banneker-output
+          path: /tmp/target-repo/.banneker/
+          retention-days: 30
