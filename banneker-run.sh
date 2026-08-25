@@ -31,42 +31,33 @@ if [[ -n "$TARGET_DIR" ]]; then
     echo "Error: Directory not found: $TARGET_DIR"
     exit 1
   fi
-  cd "$TARGET_DIR"
   echo "==> Installing Banneker in $TARGET_DIR..."
-  npx banneker --opencode --local
+  (cd "$TARGET_DIR" && npx banneker --opencode --local)
 fi
 
 echo "==> Running Banneker: $COMMAND"
 
+if [[ -n "$TARGET_DIR" ]]; then
+  WORK_DIR="$TARGET_DIR"
+else
+  WORK_DIR="."
+fi
+
+run_banneker() {
+  local cmd="$1"
+  echo "==> Running /banneker:${cmd}..."
+  opencode run --dir "$WORK_DIR" --command "banneker-${cmd}" --auto
+  echo "==> /banneker:${cmd} finished."
+}
+
 case "$COMMAND" in
-  document)
-    opencode -c "Run /banneker:document to analyze this codebase"
-    ;;
-  survey)
-    opencode -c "Run /banneker:survey to start the discovery interview"
-    ;;
-  architect)
-    opencode -c "Run /banneker:architect to generate planning documents"
-    ;;
-  roadmap)
-    opencode -c "Run /banneker:roadmap to generate architecture diagrams"
-    ;;
-  appendix)
-    opencode -c "Run /banneker:appendix to compile HTML reference"
-    ;;
-  feed)
-    opencode -c "Run /banneker:feed to export planning artifacts"
-    ;;
-  audit)
-    opencode -c "Run /banneker:audit to evaluate planning documents"
+  document|survey|architect|roadmap|appendix|feed|audit)
+    run_banneker "$COMMAND"
     ;;
   all)
-    opencode -c "
-      Run /banneker:document to analyze the codebase.
-      Then run /banneker:roadmap to generate architecture diagrams.
-      Then run /banneker:appendix to compile HTML reference.
-      Show me the results.
-    "
+    run_banneker "document"
+    run_banneker "roadmap"
+    run_banneker "appendix"
     ;;
   *)
     echo "Unknown command: $COMMAND"
