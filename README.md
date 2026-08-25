@@ -7,14 +7,13 @@ A reusable wrapper for [Banneker](https://www.npmjs.com/package/banneker) — pr
 ```bash
 # Clone this repo anywhere
 git clone <your-repo-url> ~/my-banneker
-
-# Install Banneker into your project
 cd ~/my-banneker
-./setup.sh /path/to/your/project
 
-# Run Banneker from your project directory
-cd /path/to/your/project
-~/my-banneker/banneker-run.sh document
+# Run against the current project
+./banneker-run.sh document
+
+# Or run against any local directory
+./banneker-run.sh --target /path/to/project all
 ```
 
 ## What It Does
@@ -24,6 +23,12 @@ Banneker analyzes your codebase and generates:
 - **Visual diagrams** — executive roadmap, system architecture, decision maps, wiring diagrams (HTML)
 - **HTML appendix** — a browsable website of your project's architecture
 - **Exportable artifacts** — markdown and JSON for feeding into other AI tools
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--target <path>` | Run against a specific local directory |
 
 ## Commands
 
@@ -55,8 +60,6 @@ xdg-open .banneker/diagrams/architecture-wiring.html
 
 ## How It Works
 
-1. `setup.sh` runs `npx banneker --opencode --local` to install Banneker commands into the target project
-2. `banneker-run.sh` invokes opencode with the appropriate Banneker command
+1. **Local mode:** Run from a project directory where Banneker is installed
+2. **Target mode:** Use `--target <path>` to run against any local directory
 3. Banneker agents analyze your code and generate output in `.banneker/`
-
-**Important:** Run `banneker-run.sh` from the target project directory (where Banneker was installed), not from this repo.

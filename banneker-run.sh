@@ -2,10 +2,39 @@
 set -euo pipefail
 
 # Banneker CLI wrapper - runs Banneker commands via opencode
-# Usage: ./banneker-run.sh [command]
+# Usage: ./banneker-run.sh [--target <path>] [command]
 # Commands: document, survey, architect, roadmap, appendix, feed, audit, all (default: all)
 
-COMMAND="${1:-all}"
+TARGET_DIR=""
+COMMAND="all"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target)
+      TARGET_DIR="$2"
+      shift 2
+      ;;
+    -*)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--target <path>] [command]"
+      exit 1
+      ;;
+    *)
+      COMMAND="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "$TARGET_DIR" ]]; then
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    echo "Error: Directory not found: $TARGET_DIR"
+    exit 1
+  fi
+  cd "$TARGET_DIR"
+  echo "==> Installing Banneker in $TARGET_DIR..."
+  npx banneker --opencode --local
+fi
 
 echo "==> Running Banneker: $COMMAND"
 
@@ -41,7 +70,7 @@ case "$COMMAND" in
     ;;
   *)
     echo "Unknown command: $COMMAND"
-    echo "Usage: $0 [document|survey|architect|roadmap|appendix|feed|audit|all]"
+    echo "Usage: $0 [--target <path>] [document|survey|architect|roadmap|appendix|feed|audit|all]"
     exit 1
     ;;
 esac
