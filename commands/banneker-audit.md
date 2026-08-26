@@ -59,11 +59,7 @@ ls -lh .banneker/audit-report.md 2>/dev/null
 ```
 
 If `.banneker/audit-report.json` exists:
-1. Extract creation date from file modification time
-2. Display to user: "Previous audit report found (created [date])."
-3. Prompt user: "Re-run audit with current plans? (y/N)"
-   - If **yes**: Delete existing reports and proceed to Step 2 as fresh audit
-   - If **no**: Display "Existing audit preserved. See .banneker/audit-report.md" and abort (do not proceed)
+1. Auto-re-run: Delete existing reports and proceed to Step 2 as fresh audit. Display: "Existing audit found. Re-running with current plans."
 
 If no existing report: Proceed to Step 2 as fresh audit.
 

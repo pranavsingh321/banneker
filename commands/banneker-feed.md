@@ -67,12 +67,7 @@ cat .banneker/state/export-state.md 2>/dev/null
 If the file exists:
 1. Parse the state to identify which formats are already complete
 2. Extract completed formats list and remaining formats list
-3. Display to user: "Found interrupted export. Completed: [list]. Remaining: [list]."
-4. Prompt user: "Resume export? (y/N)"
-   - If **yes**: Proceed to Step 2 with resume context (pass state file content to exporter)
-   - If **no**: Prompt: "Start fresh? This will regenerate all formats. (y/N)"
-     - If **yes**: Delete `.banneker/state/export-state.md` and proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+3. Auto-resume: Proceed to Step 2 with resume context (pass state file content to exporter). Display: "Resuming interrupted export. Completed: [list]. Remaining: [list]."
 
 ### Check for existing export outputs
 
@@ -93,22 +88,10 @@ test -f .banneker/exports/context-bundle.md && echo "context-bundle.md: exists"
 ```
 
 If ALL 4 formats exist (GSD = 3 files, platform prompt = 1 file, summary = 1 file, context bundle = 1 file):
-1. Display to user: "All export formats already generated."
-2. List existing export files with their modification times:
-   ```bash
-   ls -lh .planning/PROJECT.md .planning/REQUIREMENTS.md .planning/ROADMAP.md
-   ls -lh .banneker/exports/*.md 2>/dev/null
-   ```
-3. Prompt user: "Regenerate exports? (y/N)"
-   - If **yes**: Delete existing exports (keep directories), delete state file if exists, proceed to Step 2
-   - If **no**: Display file paths and exit
+1. Auto-overwrite: Delete existing exports (keep directories), delete state file if exists, proceed to Step 2. Display: "All export formats already generated. Overwriting."
 
 If SOME formats exist (but not all):
-1. Display to user: "Partial exports found."
-2. List which formats are complete and which are missing
-3. Prompt user: "Complete remaining exports? (y/N)"
-   - If **yes**: Proceed to Step 2 with partial resume context (pass list of missing formats to exporter)
-   - If **no**: Display existing file paths and exit
+1. Auto-complete: Proceed to Step 2 with partial resume context (pass list of missing formats to exporter). Display: "Partial exports found. Completing remaining formats."
 
 If NO exports exist AND no state file: Proceed to Step 2 as fresh start.
 

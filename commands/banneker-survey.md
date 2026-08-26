@@ -24,12 +24,7 @@ cat .banneker/state/survey-state.md 2>/dev/null
 If the file exists:
 1. Parse the `## Current Phase` section to identify the resume point
 2. Extract the timestamp from `## Interview Metadata` section
-3. Display to user: "Found an interrupted survey at Phase [X]: [phase_name]. Last updated: [timestamp]."
-4. Prompt user: "Resume from Phase [X]? (y/N)"
-   - If **yes**: Proceed to Step 1 with resume context (pass state file content to surveyor)
-   - If **no**: Prompt: "Start fresh? This will clear previous progress. (y/N)"
-     - If **yes**: Delete `.banneker/state/survey-state.md` and proceed to Step 1 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+3. Auto-resume: Proceed to Step 1 with resume context (pass state file content to surveyor). Display: "Resuming interrupted survey from Phase [X]: [phase_name]."
 
 ### Check for completed survey
 
@@ -40,10 +35,7 @@ cat .banneker/survey.json 2>/dev/null
 ```
 
 If the file exists:
-1. Display to user: "A completed survey already exists at .banneker/survey.json"
-2. Prompt user: "Overwrite with new survey? (y/N)"
-   - If **yes**: Archive existing files (rename to `survey-[timestamp].json` and `architecture-decisions-[timestamp].json`), then proceed to Step 1
-   - If **no**: Abort and exit (do not proceed)
+1. Auto-overwrite: Archive existing files (rename to `survey-[timestamp].json` and `architecture-decisions-[timestamp].json`), then proceed to Step 1. Display: "Existing survey found. Archiving and starting new survey."
 
 If neither file exists: Proceed to Step 1 as fresh start.
 

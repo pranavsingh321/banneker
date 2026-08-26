@@ -45,10 +45,6 @@ If the file exists:
 1. Parse the state to identify the resume point (which phase was in progress)
 2. Extract the timestamp from the state file
 3. Auto-resume: Proceed to Step 2 with resume context (pass state file content to cartographer). Display: "Resuming interrupted analysis from [timestamp]."
-   - If **yes**: Proceed to Step 2 with resume context (pass state file content to cartographer)
-   - If **no**: Prompt: "Start fresh? This will regenerate the analysis. (y/N)"
-     - If **yes**: Delete `.banneker/state/document-state.md` and proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
 
 ### Check for existing analysis
 
@@ -59,10 +55,7 @@ ls -lh .banneker/codebase-understanding.md 2>/dev/null
 ```
 
 If codebase-understanding.md exists AND no state file:
-1. Extract creation date from file modification time
-2. Auto-overwrite: Proceed to Step 2 as fresh start. Display: "Existing analysis found. Overwriting with fresh analysis."
-   - If **yes**: Proceed to Step 2 as fresh start
-   - If **no**: Display "Existing analysis preserved at .banneker/codebase-understanding.md" and abort (do not proceed)
+1. Auto-overwrite: Proceed to Step 2 as fresh start. Display: "Existing analysis found. Overwriting with fresh analysis."
 
 If neither state file nor codebase-understanding.md exists: Proceed to Step 2 as fresh start.
 

@@ -56,12 +56,7 @@ cat .banneker/state/engineer-state.md 2>/dev/null
 If the file exists:
 1. Parse the state to identify which documents are already complete
 2. Extract the list of completed documents and remaining documents
-3. Display to user: "Found interrupted engineering session. Completed: [list]. Remaining: [list]."
-4. Prompt user: "Resume generation? (y/N)"
-   - If **yes**: Proceed to Step 2 with resume context (pass state file content to engineer)
-   - If **no**: Prompt: "Start fresh? This will regenerate all documents. (y/N)"
-     - If **yes**: Delete `.banneker/state/engineer-state.md` and proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+3. Auto-resume: Proceed to Step 2 with resume context (pass state file content to engineer). Display: "Resuming interrupted engineering session. Completed: [list]. Remaining: [list]."
 
 ### Check for existing documents
 
@@ -72,14 +67,7 @@ ls .banneker/documents/DIAGNOSIS.md .banneker/documents/RECOMMENDATION.md .banne
 ```
 
 If documents already exist AND no state file:
-1. Display to user: "Existing engineering documents found."
-2. List the existing documents with file sizes:
-   ```bash
-   ls -lh .banneker/documents/DIAGNOSIS.md .banneker/documents/RECOMMENDATION.md .banneker/documents/ENGINEERING-PROPOSAL.md 2>/dev/null | awk '{print $9 " (" $5 ")"}'
-   ```
-3. Prompt user: "Overwrite with fresh generation? (y/N)"
-   - If **yes**: Proceed to Step 2 as fresh start
-   - If **no**: Abort and exit (do not proceed)
+1. Auto-overwrite: Proceed to Step 2 as fresh start. Display: "Existing engineering documents found. Overwriting with fresh generation."
 
 If neither state file nor documents exist: Proceed to Step 2 as fresh start.
 

@@ -89,12 +89,7 @@ cat .banneker/state/publisher-state.md 2>/dev/null
 If the file exists:
 1. Parse the state to identify which pages are already complete
 2. Extract completed pages list
-3. Display to user: "Found interrupted appendix generation. Completed: [list]. Remaining: [list]."
-4. Prompt user: "Resume generation? (y/N)"
-   - If **yes**: Proceed to Step 2 with resume context (pass state file content to publisher)
-   - If **no**: Prompt: "Start fresh? This will regenerate all pages. (y/N)"
-     - If **yes**: Delete `.banneker/state/publisher-state.md` and proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+3. Auto-resume: Proceed to Step 2 with resume context (pass state file content to publisher). Display: "Resuming interrupted appendix. Completed: [list]. Remaining: [list]."
 
 ### Check for existing appendix pages
 
@@ -105,19 +100,7 @@ ls .banneker/appendix/*.html 2>/dev/null
 ```
 
 If HTML pages already exist (beyond shared.css) AND no state file:
-1. Check for index.html specifically:
-   ```bash
-   test -f .banneker/appendix/index.html && echo "index.html exists"
-   ```
-2. Count HTML pages:
-   ```bash
-   ls .banneker/appendix/*.html 2>/dev/null | wc -l
-   ```
-3. Display to user: "Appendix pages already exist in .banneker/appendix/"
-4. List the existing pages (one per line)
-5. Prompt user: "Regenerate appendix? (y/N)"
-   - If **yes**: Delete existing HTML pages (keep shared.css), delete state file if exists, proceed to Step 2
-   - If **no**: List existing page file paths and exit
+1. Auto-overwrite: Delete existing HTML pages (keep shared.css), delete state file if exists, proceed to Step 2. Display: "Overwriting existing appendix pages."
 
 If neither state file nor HTML pages exist: Proceed to Step 2 as fresh start.
 

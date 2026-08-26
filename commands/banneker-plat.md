@@ -41,12 +41,7 @@ cat .banneker/state/plat-state.md 2>/dev/null
 If the file exists:
 1. Parse the state to identify which documents are already complete
 2. Extract the list of completed documents and remaining documents
-3. Display to user: "Found interrupted route architecture generation. Completed: [list]. Remaining: [list]."
-4. Prompt user: "Resume generation? (y/N)"
-   - If **yes**: Proceed to Step 2 with resume context (pass state file content to plat-generator)
-   - If **no**: Prompt: "Start fresh? This will regenerate all route documentation. (y/N)"
-     - If **yes**: Delete `.banneker/state/plat-state.md` and proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+3. Auto-resume: Proceed to Step 2 with resume context (pass state file content to plat-generator). Display: "Resuming interrupted route architecture generation. Completed: [list]. Remaining: [list]."
 
 ### Check for existing route documentation
 
@@ -58,22 +53,10 @@ cat .banneker/documents/route-architecture.md 2>/dev/null
 ```
 
 If both documents already exist AND no state file:
-1. Display to user: "Existing route documentation found:"
-2. List the existing documents:
-   - .banneker/documents/sitemap.md
-   - .banneker/documents/route-architecture.md
-3. Display: "Route architecture documentation already complete."
-4. Prompt user: "Regenerate from scratch? (y/N)"
-   - If **yes**: Proceed to Step 2 as fresh start
-   - If **no**: Abort and exit (do not proceed)
+1. Auto-overwrite: Proceed to Step 2 as fresh start. Display: "Existing route documentation found. Regenerating from scratch."
 
 If only one document exists (partial completion):
-1. Display to user: "Partial route documentation found. This may indicate interrupted generation."
-2. Prompt user: "Complete remaining documents? (y/N)"
-   - If **yes**: Proceed to Step 2 with partial resume context
-   - If **no**: Prompt: "Regenerate all from scratch? (y/N)"
-     - If **yes**: Proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+1. Auto-complete: Proceed to Step 2 with partial resume context. Display: "Partial route documentation found. Completing remaining documents."
 
 If neither state file nor documents exist: Proceed to Step 2 as fresh start.
 

@@ -53,10 +53,7 @@ cat .banneker/state/.continue-here.md 2>/dev/null
 
 If the file exists:
 1. Parse the handoff file to understand what was completed in Wave 1
-2. Display to user: "Found handoff from Wave 1. Completed diagrams: executive-roadmap.html, decision-map.html, system-map.html. Remaining: architecture-wiring.html (Wave 2, requires JavaScript)."
-3. Prompt user: "Continue to Wave 2? (y/N)"
-   - If **yes**: Proceed to Step 2 with Wave 2 context (pass handoff file content to diagrammer)
-   - If **no**: Display: "Keeping Wave 1 diagrams. Run /banneker:roadmap again when ready for Wave 2." and exit
+2. Auto-continue: Proceed to Step 2 with Wave 2 context (pass handoff file content to diagrammer). Display: "Resuming Wave 2 from handoff."
 
 ### Check for interrupted generation
 
@@ -69,12 +66,7 @@ cat .banneker/state/diagrammer-state.md 2>/dev/null
 If the file exists:
 1. Parse the state to identify which wave and which diagrams are already complete
 2. Extract completed diagrams list and current wave number
-3. Display to user: "Found interrupted diagram generation. Wave: [N]. Completed: [list]. Remaining: [list]."
-4. Prompt user: "Resume generation? (y/N)"
-   - If **yes**: Proceed to Step 2 with resume context (pass state file content to diagrammer)
-   - If **no**: Prompt: "Start fresh? This will regenerate all diagrams. (y/N)"
-     - If **yes**: Delete `.banneker/state/diagrammer-state.md` and `.banneker/state/.continue-here.md` if present, then proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
+3. Auto-resume: Proceed to Step 2 with resume context (pass state file content to diagrammer). Display: "Resuming interrupted diagram generation. Wave: [N]. Completed: [list]. Remaining: [list]."
 
 ### Check for existing diagrams
 
@@ -85,29 +77,7 @@ ls .banneker/diagrams/*.html 2>/dev/null
 ```
 
 If diagrams already exist AND no state files:
-1. Check if all 4 diagrams exist:
-   - executive-roadmap.html
-   - decision-map.html
-   - system-map.html
-   - architecture-wiring.html
-2. Count existing diagrams:
-   ```bash
-   ls .banneker/diagrams/*.html 2>/dev/null | wc -l
-   ```
-3. Display to user: "Found [N] existing diagram(s) at .banneker/diagrams/"
-4. List the existing diagrams (one per line)
-5. If **all 4 exist**:
-   - Display: "All 4 architecture diagrams already exist."
-   - Prompt user: "Regenerate from scratch? (y/N)"
-     - If **yes**: Proceed to Step 2 as fresh start
-     - If **no**: Abort and exit (do not proceed)
-6. If **1-3 exist** (partial completion):
-   - Display: "Partial diagram set detected. This may indicate Wave 1 completed but Wave 2 is missing."
-   - Prompt user: "Complete remaining diagrams? (y/N)"
-     - If **yes**: Proceed to Step 2 with partial resume context
-     - If **no**: Prompt: "Regenerate all from scratch? (y/N)"
-       - If **yes**: Proceed to Step 2 as fresh start
-       - If **no**: Abort and exit (do not proceed)
+1. Auto-overwrite: Proceed to Step 2 as fresh start. Display: "Existing diagrams found. Regenerating from scratch."
 
 If neither state files nor diagrams exist: Proceed to Step 2 as fresh start.
 
