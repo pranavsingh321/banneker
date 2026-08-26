@@ -19,7 +19,7 @@ TARGET_DIR="${TARGET_DIR:?ERROR: TARGET_DIR is required}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_NAME="$(basename "$TARGET_DIR")"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/banneker-output/$TARGET_NAME}"
-BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect}"
+BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect,audit}"
 OPENCODE_BIN="${OPENCODE_BIN:-opencode}"
 
 log() { echo "==> $*"; }
