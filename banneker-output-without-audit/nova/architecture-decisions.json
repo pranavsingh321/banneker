@@ -1,0 +1,220 @@
+{
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "question": "How should compute orchestration be distributed across processes?",
+      "choice": "Three-process distributed architecture: nova-compute, nova-conductor, and nova-scheduler run as separate daemons communicating via RPC (oslo.messaging).",
+      "rationale": "Separating compute, conductor, and scheduler into distinct processes enables independent scaling, fault isolation, and cell-based horizontal growth. Compute nodes have no direct database access, improving security and allowing them to run in untrusted tenant environments. The conductor service centralizes database operations, reducing the attack surface of compute nodes.",
+      "alternatives_considered": [
+        {
+          "option": "Monolithic single-process Nova",
+          "rejected_because": "Would not scale horizontally; compute nodes would need direct database access, creating security risks and bottlenecks"
+        },
+        {
+          "option": "Microservices with separate API per function",
+          "rejected_because": "OpenStack ecosystem requires tightly integrated services; finer granularity would add complexity without proportional benefit at the time of design"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-002",
+      "question": "How should Nova manage its data models across API versions and database migrations?",
+      "choice": "Two-layer data model: SQLAlchemy ORM models in nova/db/ with Shadow tables for soft deletes, wrapped by oslo.versionedobjects (65 object classes with explicit VERSION attributes) in nova/objects/.",
+      "rationale": "Versioned objects provide API-level backward compatibility independent of database schema changes. Shadow tables enable audit trails and soft deletes without complex SQL logic. The 'Smart Managers, Dumb Data' pattern separates business logic from data, making both independently testable.",
+      "alternatives_considered": [
+        {
+          "option": "Single ORM model layer without versioned objects",
+          "rejected_because": "Would require database migrations for every API change, breaking backward compatibility"
+        },
+        {
+          "option": "Flat NoSQL data store",
+          "rejected_because": "OpenStack services expect relational data with strong consistency; SQL provides necessary transactional guarantees"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-003",
+      "question": "What is the REST API communication strategy and versioning approach?",
+      "choice": "REST API over WSGI with microversioning (2.1 base, currently 2.104). URL routing via Routes library with a custom ProjectMapper. All endpoints return JSON. Microversions controlled via X-OpenStack-Nova-API-Version header.",
+      "rationale": "Microversioning allows Nova to evolve its API without breaking existing clients. The 390+ microversion changes show a highly iterative development approach. WSGI with PasteDeploy provides a standard deployment interface compatible with all OpenStack services. JSON-only response simplifies client code.",
+      "alternatives_considered": [
+        {
+          "option": "URL-based versioning (e.g., /v1/, /v2/)",
+          "rejected_because": "URL-based versions create permanent URL endpoints that cannot be deprecated; microversion header allows deprecation while keeping a single endpoint path"
+        },
+        {
+          "option": "GraphQL API",
+          "rejected_because": "OpenStack ecosystem uses REST; changing to GraphQL would break compatibility with existing client SDKs and tooling"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-004",
+      "question": "Which virtualization backend should be the default?",
+      "choice": "Libvirt (KVM/QEMU/LXC/Parallels) as the default driver, with VMware, IBM Z (ZVM), and bare metal (Ironic) as optional drivers loaded via Stevedore entry points.",
+      "rationale": "Libvirt is the most widely deployed virtualization stack in OpenStack environments and has the most mature feature set. Pluggable driver architecture via Stevedore allows Nova to support diverse hardware without coupling the core codebase to specific hypervisor logic.",
+      "alternatives_considered": [
+        {
+          "option": "Make all drivers first-class with equal complexity in core",
+          "rejected_because": "Would bloat the core codebase with driver-specific code that only a fraction of users need"
+        },
+        {
+          "option": "Container-only runtime (Docker/LXC)",
+          "rejected_because": "At the time of Nova's design, VM workloads dominated cloud demand; containers are handled by separate OpenStack projects (Sahara, Magnum)"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-005",
+      "question": "How should Nova scale to support thousands of compute nodes?",
+      "choice": "Cells v2 architecture: Cell0 is a metadata-only database; Cell1+ each have their own database, conductor, and compute hosts. Conductor routes requests between cells via RPC.",
+      "rationale": "Single-database Nova hits scalability limits around a few thousand hosts due to database connection pools and lock contention. Cell isolation allows each cell to scale independently with its own compute, conductor, and database — enabling cloud providers to grow Nova horizontally.",
+      "alternatives_considered": [
+        {
+          "option": "Database partitioning within a single Nova deployment",
+          "rejected_because": "Database-level partitioning is harder to manage and still creates a single point of failure for the conductor"
+        },
+        {
+          "option": "Fully distributed without cells (peer-to-peer compute)",
+          "rejected_because": "Without the conductor/routing layer, there is no centralized resource tracking or scheduling coordination"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-006",
+      "question": "What concurrency model should Nova use for handling requests?",
+      "choice": "Eventlet green threads as the default concurrency model, with a native Python threading fallback via concurrency_backend configuration option.",
+      "rationale": "Eventlet provides non-blocking I/O at the application level, allowing a single process to handle thousands of concurrent connections. The threading fallback accommodates environments where eventlet is incompatible (e.g., certain glibc versions, profiler tools). Test infrastructure enforces greenlet leak detection to prevent resource exhaustion.",
+      "alternatives_considered": [
+        {
+          "option": "Asyncio-based concurrency",
+          "rejected_because": "oslo.* library ecosystem is built on eventlet; migrating to asyncio would require rewriting the entire dependency chain"
+        },
+        {
+          "option": "Thread-per-request with native Python threads",
+          "rejected_because": "Native threads consume more memory and OS resources than green threads; would require more compute nodes for the same load"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-007",
+      "question": "How should authorization be enforced across the API layer?",
+      "choice": "oslo.policy with 56 policy modules defining fine-grained RBAC rules. Custom policy enforcer entry point (nova.policy:get_enforcer). Policy rules checked at each API endpoint via the middleware stack.",
+      "rationale": "oslo.policy is the OpenStack standard for authorization, enabling consistent policy management across all OpenStack services. 56 policy files correspond to API modules, providing granular control over which roles can perform which actions. Centralized enforcer entry point allows Nova-specific policy behavior.",
+      "alternatives_considered": [
+        {
+          "option": "Custom authorization framework",
+          "rejected_because": "Would not be compatible with existing OpenStack policy tools (oslopolicy-sample-generator, nova-policy CLI) and would diverge from ecosystem standards"
+        },
+        {
+          "option": "Attribute-based access control (ABAC)",
+          "rejected_because": "oslo.policy supports role-based rules which are simpler to manage and audit; ABAC complexity was not justified for Nova's use case"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-008",
+      "question": "How should Nova support pluggable scheduler filters and weight functions?",
+      "choice": "Stevedore entry points for scheduler filters (19 filters) and weight plugins, with a custom RequestFilter base class providing get_filters() and get_weights() pattern.",
+      "rationale": "Different cloud deployments have vastly different hardware and scheduling requirements (NUMA topology, PCI passthrough, affinity, availability zones). Pluggable filters allow operators to enable only the filters they need. Stevedore provides a standard Python plugin loading mechanism.",
+      "alternatives_considered": [
+        {
+          "option": "Hard-coded scheduler logic",
+          "rejected_because": "Would force all operators to use the same scheduling policy, which does not work across heterogeneous deployments"
+        },
+        {
+          "option": "External scheduler service",
+          "rejected_because": "Scheduling is latency-sensitive and requires tight integration with placement resource data; external service would add network overhead"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-009",
+      "question": "How should privileged operations be isolated from untrusted API code?",
+      "choice": "oslo.privsep with privilege separation helpers in nova/privsep/. Privileged operations (host commands, block device operations) are decorated with privsep decorators and execute in a separate process via oslo-rootwrap.",
+      "rationale": "Nova-compute runs as root to manage VMs but should not trust input from the API layer. Privilege separation ensures that even if an API controller is compromised, the damage is limited to unprivileged operations. Rootwrap adds an additional layer by explicitly whitelisting allowed host commands.",
+      "alternatives_considered": [
+        {
+          "option": "Run nova-compute as unprivileged user",
+          "rejected_because": "Many hypervisor operations (KVM, network bridging, block device attachment) require root privileges; running unprivileged would disable most functionality"
+        },
+        {
+          "option": "Sudo-based privilege escalation",
+          "rejected_because": "oslo.privsep is more secure than sudo (compartmentalized privilege, no shared credentials) and more efficient (no password prompt overhead)"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-010",
+      "question": "What is the messaging transport for inter-service RPC communication?",
+      "choice": "oslo.messaging with RabbitMQ via Kombu as the default transport. Message queues handle RPC requests between API, scheduler, conductor, and compute services.",
+      "rationale": "RabbitMQ is the most widely deployed message broker in OpenStack deployments. oslo.messaging provides a transport abstraction that allows switching transports (RabbitMQ, ZeroMQ, in-memory) via configuration. Kombu provides robust message delivery with acknowledgments and dead-letter queues.",
+      "alternatives_considered": [
+        {
+          "option": "ZeroMQ transport",
+          "rejected_because": "ZeroMQ has no message persistence; lost messages during broker restart would cause data inconsistency. RabbitMQ's persistence guarantees are essential for build requests and migrations."
+        },
+        {
+          "option": "Direct TCP connections between services",
+          "rejected_because": "Would create tight coupling between services, make horizontal scaling difficult, and lack message queuing semantics"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-011",
+      "question": "How should build requests be coordinated between scheduler and compute?",
+      "choice": "Scheduler → Conductor → Compute RPC chain with cursive distributed state machine for live migration coordination and TooZ lock groups for distributed locking.",
+      "rationale": "The three-step RPC chain ensures that resource allocation (Placement), database updates (Conductor), and VM lifecycle (Compute) are coordinated through consistent pathways. Cursive provides a formal state machine for live migration, preventing race conditions during the complex pre-copy and switchover phases. TooZ prevents concurrent operations on the same instance.",
+      "alternatives_considered": [
+        {
+          "option": "Direct Scheduler → Compute RPC",
+          "rejected_because": "Would bypass the conductor layer, losing database consistency guarantees and cell-aware routing"
+        },
+        {
+          "option": "Synchronous build (no RPC layer)",
+          "rejected_because": "Synchronous builds would block API threads during potentially long-running VM provisioning, degrading API throughput"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "DEC-012",
+      "question": "How should configuration options be organized across the codebase?",
+      "choice": "Modular config options in nova/conf/ (48 config modules), aggregated via oslo.config entry point. All options defined as oslo.config OPT objects with section names, types, help text, and default values.",
+      "rationale": "Modular config files mirror Nova's subsystem architecture — each subsystem has its own config module. oslo.config provides a unified CLI interface, config file parsing, and runtime reloading. The entry point registration enables oslo-config-generator to produce a complete nova.conf sample.",
+      "alternatives_considered": [
+        {
+          "option": "Single monolithic config file",
+          "rejected_because": "With 48+ subsystems, a single config file would be unwieldy and difficult to navigate. Modular approach enables per-subsystem documentation and validation."
+        },
+        {
+          "option": "YAML/JSON config format instead of oslo.config INI-style",
+          "rejected_because": "oslo.config supports the existing OpenStack deployment tooling (oslo-config-generator, Devstack, Ansible) and is the ecosystem standard"
+        }
+      ],
+      "phase": "backend",
+      "timestamp": "2026-08-26T00:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,337 @@
+{
+  "survey_metadata": {
+    "version": "2.0",
+    "created": "2026-08-26T00:00:00Z",
+    "runtime": "opencode",
+    "status": "complete"
+  },
+  "project": {
+    "name": "OpenStack Nova",
+    "one_liner": "OpenStack's distributed compute service that manages the lifecycle of instances (virtual machines and bare metal) in a cloud infrastructure, including creation, scheduling, live migration, resizing, and deletion across multi-cell deployments.",
+    "problem": "Cloud operators need a scalable, multi-tenant compute orchestration layer that abstracts heterogeneous virtualization technologies (KVM/QEMU, VMware, IBM Z, bare metal via Ironic) into a unified API, while supporting horizontal scaling through cells v2, integrating with other OpenStack services (Glance for images, Neutron for networking, Cinder for block storage, Keystone for authentication), and providing fine-grained RBAC with microversioned REST APIs.",
+    "has_backend": true,
+    "has_frontend": false,
+    "project_type": "backend-service",
+    "scale": "large"
+  },
+  "actors": [
+    {
+      "name": "Cloud Administrator",
+      "type": "human",
+      "role": "Manages Nova infrastructure including cells, aggregates, host aggregates, security groups, quotas, and service management.",
+      "capabilities": [
+        "Create, update, and delete host aggregates",
+        "Manage cell mappings and database synchronization",
+        "Enable/disable nova-compute and nova-scheduler services",
+        "Configure quotas and limits per project",
+        "Run nova-manage and nova-status management CLI commands",
+        "Configure policy rules and security group defaults",
+        "Monitor service health via nova-status"
+      ]
+    },
+    {
+      "name": "Cloud User (Tenant)",
+      "type": "human",
+      "role": "End user who provisions and manages compute instances within their project/tenant.",
+      "capabilities": [
+        "Create, list, show, update, and delete servers (instances)",
+        "Boot instances from images or snapshots",
+        "Resize instances (change flavor)",
+        "Reboot, pause, resume, suspend, and stop instances",
+        "Attach and detach volumes",
+        "List and show flavors, images, hypervisors, and aggregates",
+        "Access console via noVNC, Spice, or serial proxy",
+        "Launch instances via user-data and config-drive",
+        "Manage server groups (anti-affinity, affinity policies)",
+        "Use microversioned API features"
+      ]
+    },
+    {
+      "name": "OpenStack Keystone",
+      "type": "system",
+      "role": "Identity and authentication service that validates tokens, enforces RBAC policy, and provides the context for all Nova API requests.",
+      "capabilities": [
+        "Authenticate API requests via token validation",
+        "Provide tenant/project context",
+        "Enforce authorization policy rules via oslo.policy",
+        "Support role-based access control"
+      ]
+    },
+    {
+      "name": "OpenStack Glance",
+      "type": "system",
+      "role": "Image service that Nova queries for VM disk images, metadata, and image properties used in filter-based host scheduling.",
+      "capabilities": [
+        "Serve VM disk images to compute nodes",
+        "Provide image metadata (architecture, min disk, min RAM)",
+        "Expose image properties used by scheduler filters",
+        "Support image caching at compute nodes"
+      ]
+    },
+    {
+      "name": "OpenStack Neutron",
+      "type": "system",
+      "role": "Networking service that Nova integrates with for virtual network interface assignment, security groups, and port management.",
+      "capabilities": [
+        "Create and manage network interfaces (ports)",
+        "Assign IP addresses to instances",
+        "Manage security groups (firewall rules)",
+        "Provide network topology (subnets, routers)",
+        "Support distributed virtual routing (OVS)"
+      ]
+    },
+    {
+      "name": "OpenStack Cinder",
+      "type": "system",
+      "role": "Block storage service that Nova integrates with for attaching persistent block storage volumes to instances.",
+      "capabilities": [
+        "Attach and detach iSCSI/FC volumes to instances",
+        "Provide volume metadata (size, type, availability zone)",
+        "Support boot-from-volume instances",
+        "Expose volume drivers for storage backends"
+      ]
+    },
+    {
+      "name": "OpenStack Placement",
+      "type": "system",
+      "role": "Resource provider tracking service that Nova queries and updates for resource allocation (vCPUs, memory, disk, custom resources) at each compute node.",
+      "capabilities": [
+        "Track resource allocation per compute host",
+        "Provide resource utilization data for scheduler filtering",
+        "Accept resource provider updates from Nova compute",
+        "Support custom resource classes and traits"
+      ]
+    },
+    {
+      "name": "VM Instance",
+      "type": "system",
+      "role": "The virtual machine or bare-metal instance managed by Nova, which exposes a metadata service and is controlled via hypervisor-level operations.",
+      "capabilities": [
+        "Access instance metadata via local metadata service",
+        "Run guest OS workloads",
+        "Report heartbeat and live state",
+        "Support live migration between hosts",
+        "Expose console access (noVNC, Spice, serial)"
+      ]
+    }
+  ],
+  "walkthroughs": [
+    {
+      "name": "Create and boot a server instance",
+      "type": "primary",
+      "steps": [
+        "User authenticates with Keystone and submits POST /servers with image_id, flavor_id, network_info, and optional user_data",
+        "API controller validates the request against the current microversion schema",
+        "Keystone middleware authenticates the token and applies policy rules",
+        "ComputeManager.create() is called, which notifies the Scheduler via RPC",
+        "Scheduler selects a host using filters (affinity, NUMA, PCI, image properties, aggregate filters) and weights",
+        "Scheduler routes the build request to the appropriate conductor service (cell-aware)",
+        "Conductor dispatches the build request to the target nova-compute node via RPC",
+        "Compute node reserves resource allocations in Placement (vCPUs, memory, disk)",
+        "Compute node downloads the image from Glance (if not cached)",
+        "Compute node allocates network resources via Neutron (creates port, assigns IP)",
+        "Compute node spawns the VM via the virt driver (libvirt/KVM by default)",
+        "Compute node updates the Instance object state to ACTIVE",
+        "User receives 202 Accepted with server creation response"
+      ],
+      "system_responses": [
+        "202 Accepted with server object containing id, status, and links",
+        "Instance transitions through BUILDING -> ACTIVE states",
+        "Placement resource allocations committed on the compute host",
+        "Neutron port created and associated with the instance network",
+        "Glance image referenced and cached on compute node"
+      ],
+      "data_changes": [
+        "Instance row created with status=BUILDING",
+        "InstanceAction record created for the build operation",
+        "Resource provider updates in Placement (allocations table)",
+        "Neutron port created with MAC address assignment",
+        "Shadow instance row created for historical tracking"
+      ],
+      "error_cases": [
+        "No suitable host found: Scheduler returns no candidates, API returns 400 NoValidHost",
+        "Flavor not found: API returns 404 FlavorNotFound",
+        "Image not found: API returns 404 ImageNotFound",
+        "Quota exceeded: API returns 403 RequestLimitExceeded",
+        "Insufficient resources: Scheduler filter rejects all hosts due to placement constraints",
+        "Neutron network unavailable: Build fails with NetworkNotFound or PortCreationFailed"
+      ]
+    },
+    {
+      "name": "Live migrate a running instance",
+      "type": "primary",
+      "steps": [
+        "User submits POST /servers/{id}/action with action=migrate on the target server",
+        "API controller validates the microversion for migration features",
+        "ComputeManager.migrate_server() initiates the migration flow",
+        "Scheduler selects a destination host using the same filter/weight pipeline as build",
+        "Conductor coordinates the migration request to the destination compute node",
+        "Pre-copy phase: compute nodes transfer memory pages of the running VM over the network",
+        "cursive distributed state machine coordinates the live migration state machine",
+        "TooZ lock groups prevent concurrent operations on the same instance",
+        "Final pause and switch: instance paused briefly, state transferred, instance resumed on destination",
+        "Instance actions updated to reflect the migration completion",
+        "Placement resource allocations swapped between source and destination",
+        "User receives 202 Accepted"
+      ],
+      "system_responses": [
+        "202 Accepted with migration ID",
+        "Instance enters MIGRATING state, then VERIFY_RESUME, then RESUMED",
+        "Source compute node releases resource allocations",
+        "Destination compute node receives resource allocations",
+        "Migration record created with status=finished"
+      ],
+      "data_changes": [
+        "Migration row created with initial status=check_cell0",
+        "Instance compute_host and host fields updated on destination",
+        "Placement allocations transferred between compute hosts",
+        "InstanceAction records logged for each migration step"
+      ],
+      "error_cases": [
+        "Destination host lacks sufficient resources: migration rejected during pre-check",
+        "Network bandwidth insufficient: live migration stalls or times out",
+        "Incompatible CPU between hosts: migration fails with CPU capability mismatch",
+        "Source compute goes down during migration: instance lost, must be restored from storage",
+        "Conductor unreachable: build request cannot be dispatched"
+      ]
+    },
+    {
+      "name": "Resize an instance (change flavor)",
+      "type": "primary",
+      "steps": [
+        "User submits POST /servers/{id}/action with action=resize, specifying a new flavor_id",
+        "API controller verifies the user has permissions to resize and the target flavor exists",
+        "Nova creates a resize request and allocates resources on the destination host",
+        "Scheduler selects a destination host for the resized instance",
+        "Instance is powered off and migrated to the destination (similar to live migration but with shutdown)",
+        "Disk is resized on the destination compute node",
+        "Instance boots on the destination with new flavor specs",
+        "User must confirm (POST /servers/{id}/action with action=confirmResize) or revert (action=revertResize)",
+        "On confirm: source resources released, migration marked complete",
+        "On revert: instance and disk moved back to original host"
+      ],
+      "system_responses": [
+        "202 Accepted with resize confirmation required",
+        "Instance enters VERIFY_RESIZE state until confirmed",
+        "Disk resized on destination compute node",
+        "New flavor specs applied (vCPUs, memory, disk)"
+      ],
+      "data_changes": [
+        "ResizeRequest record created in database",
+        "Instance flavor updated to new flavor",
+        "Resource allocations adjusted on both source and destination",
+        "Migration record created with status=completed or reverted"
+      ],
+      "error_cases": [
+        "No host with sufficient resources for target flavor: resize rejected",
+        "User does not confirm within timeout: resize automatically reverts",
+        "Disk resize fails on destination: revert triggered automatically",
+        "Conductor service unavailable: resize request cannot proceed"
+      ]
+    },
+    {
+      "name": "List and filter servers with microversion API",
+      "type": "primary",
+      "steps": [
+        "User sends GET /servers with query parameters (status, image_id, flavor_id, host, project_id)",
+        "API controller applies X-OpenStack-Nova-API-Version header for microversion",
+        "ServersController.index() queries Instance objects via the object layer",
+        "Filters applied at the database level via SQLAlchemy queries",
+        "View module serializes the response with microversion-aware response format",
+        "User receives filtered list of servers with metadata links"
+      ],
+      "system_responses": [
+        "200 OK with paginated server list",
+        "Response format varies based on microversion",
+        "Links to server details, actions, and migrations included"
+      ],
+      "data_changes": [],
+      "error_cases": [
+        "Invalid microversion header: API returns 400 BadVersion",
+        "Malformed query parameters: API returns 400 BadRequest",
+        "Unauthorized: Keystone rejects token, API returns 401 Unauthorized"
+      ]
+    },
+    {
+      "name": "Access instance console via noVNC proxy",
+      "type": "secondary",
+      "steps": [
+        "User authenticates with Keystone and requests GET /servers/{id}/actions/os-get-vnc-console",
+        "API controller validates access and creates a console ticket via VncConsoleManager",
+        "nova-novncproxy service receives the VNC connection request with the ticket",
+        "Proxy authenticates the ticket and forwards the WebSocket connection to the compute node's VNC server",
+        "User sees the VM console in their browser via the noVNC WebSocket connection"
+      ],
+      "system_responses": [
+        "200 OK with console URL and type (novnc/spicehtml5/serial)",
+        "Proxy tunnels WebSocket traffic between browser and compute node",
+        "Ticket expires after configured timeout"
+      ],
+      "data_changes": [
+        "Console ticket created with expiration timestamp",
+        "Console entry logged in the database"
+      ],
+      "error_cases": [
+        "Instance not running: console request rejected",
+        "VNC server not listening on compute node: proxy returns 500",
+        "Ticket expired: authentication rejected by proxy"
+      ]
+    }
+  ],
+  "backend": {
+    "applicable": true,
+    "data_stores": [
+      "PostgreSQL (primary production database)",
+      "MySQL/MariaDB (alternative production database)",
+      "SQLite (test fallback)",
+      "Alembic (database migration framework)",
+      "oslo.db (database session management with retry logic)"
+    ],
+    "integrations": [
+      "OpenStack Keystone — authentication and authorization",
+      "OpenStack Glance — VM image service",
+      "OpenStack Neutron — virtual networking and security groups",
+      "OpenStack Cinder — block storage volume management",
+      "OpenStack Placement — resource provider tracking and allocation",
+      "RabbitMQ via oslo.messaging — inter-service RPC messaging",
+      "Barbican via castellan — cryptographic key management",
+      "Dogpile.cache via oslo.cache — caching layer"
+    ],
+    "infrastructure": [
+      "Distributed multi-process architecture: nova-compute, nova-conductor, nova-scheduler as separate daemons",
+      "Multi-cell deployment support (cells v2) with cell0 (metadata) and cell1+ (compute hosts)",
+      "Eventlet green threads with native threading fallback",
+      "Pluggable virtualization drivers via Stevedore entry points (libvirt, VMware, ZVM, Ironic)",
+      "Pluggable scheduler filters and weights via Stevedore entry points",
+      "WSGI pipeline via PasteDeploy (api-paste.ini)",
+      "Ansible roles and playbooks for deployment",
+      "Zuul CI/CD pipeline for integration testing",
+      "Devstack for single-node deployment and testing",
+      "Docker for containerized CI environments"
+    ]
+  },
+  "rubric_coverage": {
+    "covered": [
+      "project_overview",
+      "actors_identified",
+      "user_journeys",
+      "tech_stack",
+      "data_layer",
+      "api_surface",
+      "integration_boundaries",
+      "deployment_model",
+      "concurrency_model",
+      "security_model",
+      "configuration_management",
+      "plugin_extensibility"
+    ],
+    "gaps": [
+      "exact_oslo_library_versions — runtime versions use >= lower_bound semantics from requirements.txt",
+      "metadata_service_detail — nova/api/metadata/ sub-service not examined in depth",
+      "optional_driver_complexity — VMware, ZVM, and Ironic drivers have additional complexity not fully explored",
+      "migration_file_count — full Alembic migration history may span more files than visible in scan depth",
+      "cell_rpc_protocol_details — exact messaging protocol between cells and conductor not fully traced",
+      "performance_characteristics — no benchmark data or performance profiles documented in source"
+    ]
+  }
+}
