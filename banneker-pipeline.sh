@@ -5,20 +5,27 @@ set -euo pipefail
 # Platform-agnostic automation for codebase analysis and planning document generation.
 #
 # Usage:
-#   ./banneker-pipeline.sh                          # uses defaults
-#   TARGET_DIR=./my-repo BRANCH=main ./banneker-pipeline.sh
+#   ./banneker-pipeline.sh                                      # uses defaults
+#   TARGET_DIR=./my-repo ./banneker-pipeline.sh                 # analyze my-repo, store results here
+#   TARGET_DIR=./my-repo OUTPUT_DIR=./reports ./banneker-pipeline.sh  # custom output location
 #
 # Environment Variables:
 #   TARGET_DIR       - Path to the repository to analyze (required)
+#   OUTPUT_DIR       - Where to store results (default: ./banneker-output/<target-name>)
 #   BRANCH           - Branch to commit results back to (default: banneker/auto-docs)
 #   BANNEKER_STEPS   - Comma-separated steps to run (default: document,architect)
 #   SKIP_COMMIT      - Set to "true" to skip git commit/push (default: false)
+#   CLEAN_TARGET     - Set to "true" to remove .banneker/ from target after copy (default: false)
 #   OPENCODE_BIN     - Path to opencode binary (default: opencode)
 
 TARGET_DIR="${TARGET_DIR:?ERROR: TARGET_DIR is required}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_NAME="$(basename "$TARGET_DIR")"
+OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/banneker-output/$TARGET_NAME}"
 BRANCH="${BRANCH:-banneker/auto-docs}"
 BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect}"
 SKIP_COMMIT="${SKIP_COMMIT:-false}"
+CLEAN_TARGET="${CLEAN_TARGET:-false}"
 OPENCODE_BIN="${OPENCODE_BIN:-opencode}"
 COMMIT_MSG="banneker: update analysis $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -39,8 +46,6 @@ check_deps() {
     fail "Missing required tools: ${missing[*]}"
   fi
 }
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 install_banneker() {
   if [[ ! -d "$TARGET_DIR/.opencode/commands" ]]; then
@@ -69,8 +74,16 @@ run_step() {
   log "/banneker:${step} complete."
 }
 
+# Copy .banneker/ from target to output dir
+copy_results() {
+  mkdir -p "$OUTPUT_DIR"
+  if [[ -d "$TARGET_DIR/.banneker" ]]; then
+    cp -r "$TARGET_DIR/.banneker/"* "$OUTPUT_DIR/" 2>/dev/null || true
+    log "Results copied to $OUTPUT_DIR/"
+  fi
+}
+
 # Auto-generate survey.json from codebase-understanding.md if it doesn't exist.
-# This enables the architect step to run without an interactive interview.
 auto_generate_survey() {
   local survey="$TARGET_DIR/.banneker/survey.json"
   local understanding="$TARGET_DIR/.banneker/codebase-understanding.md"
@@ -103,12 +116,12 @@ commit_results() {
     return
   fi
 
-  cd "$TARGET_DIR"
+  cd "$SCRIPT_DIR"
 
   # Check if there are changes to commit
-  if git diff --quiet .banneker/ 2>/dev/null && \
-     [[ -z "$(git ls-files --others --exclude-standard .banneker/ 2>/dev/null)" ]]; then
-    log "No changes in .banneker/ to commit."
+  if git diff --quiet "banneker-output/$TARGET_NAME/" 2>/dev/null && \
+     [[ -z "$(git ls-files --others --exclude-standard "banneker-output/$TARGET_NAME/" 2>/dev/null)" ]]; then
+    log "No changes in banneker-output/$TARGET_NAME/ to commit."
     return
   fi
 
@@ -124,7 +137,7 @@ commit_results() {
   fi
 
   # Stage and commit
-  git add .banneker/
+  git add "banneker-output/$TARGET_NAME/"
   git commit -m "$COMMIT_MSG" || {
     log "Nothing to commit."
     return
@@ -147,6 +160,7 @@ commit_results() {
 
 log "Banneker Pipeline starting."
 log "  Target:    $TARGET_DIR"
+log "  Output:    $OUTPUT_DIR"
 log "  Branch:    $BRANCH"
 log "  Steps:     $BANNEKER_STEPS"
 log "  Commit:    $SKIP_COMMIT"
@@ -164,17 +178,21 @@ for step in "${STEPS[@]}"; do
   case "$step" in
     document)
       run_step "document"
+      copy_results
       ;;
     survey)
       run_step "survey"
+      copy_results
       ;;
     architect)
       # Architect needs survey.json — auto-generate if missing
       auto_generate_survey
       run_step "architect"
+      copy_results
       ;;
     roadmap|appendix|feed|audit)
       run_step "$step"
+      copy_results
       ;;
     *)
       log "WARNING: Unknown step '$step', skipping."
@@ -182,7 +200,13 @@ for step in "${STEPS[@]}"; do
   esac
 done
 
+# Optionally clean up target's .banneker/
+if [[ "$CLEAN_TARGET" == "true" ]]; then
+  rm -rf "$TARGET_DIR/.banneker"
+  log "Cleaned .banneker/ from target directory."
+fi
+
 commit_results
 
 log "Pipeline complete."
-log "Output location: $TARGET_DIR/.banneker/"
+log "Output location: $OUTPUT_DIR/"
