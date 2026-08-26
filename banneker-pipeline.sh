@@ -19,7 +19,7 @@ TARGET_DIR="${TARGET_DIR:?ERROR: TARGET_DIR is required}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_NAME="$(basename "$TARGET_DIR")"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/banneker-output/$TARGET_NAME}"
-BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect,audit}"
+BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect,audit,roadmap,appendix,engineer,feed,plat}"
 OPENCODE_BIN="${OPENCODE_BIN:-opencode}"
 
 log() { echo "==> $*"; }
@@ -128,7 +128,7 @@ for step in "${STEPS[@]}"; do
       run_step "architect"
       copy_results
       ;;
-    roadmap|appendix|feed|audit)
+    roadmap|appendix|feed|audit|engineer|plat)
       run_step "$step"
       copy_results
       ;;
