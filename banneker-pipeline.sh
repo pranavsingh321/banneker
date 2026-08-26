@@ -40,12 +40,25 @@ check_deps() {
   fi
 }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 install_banneker() {
   if [[ ! -d "$TARGET_DIR/.opencode/commands" ]]; then
     log "Installing Banneker in $TARGET_DIR..."
     (cd "$TARGET_DIR" && npx banneker --opencode --local)
   else
     log "Banneker already installed in $TARGET_DIR"
+  fi
+
+  # Overlay our fixed commands/agents (npm version may be outdated)
+  if [[ -d "$SCRIPT_DIR/commands" ]]; then
+    log "Overlaying fixed commands..."
+    mkdir -p "$TARGET_DIR/.opencode/commands" "$TARGET_DIR/.opencode/agents"
+    cp "$SCRIPT_DIR"/commands/banneker-*.md "$TARGET_DIR/.opencode/commands/"
+    [[ -f "$SCRIPT_DIR/commands/VERSION" ]] && cp "$SCRIPT_DIR/commands/VERSION" "$TARGET_DIR/.opencode/commands/"
+  fi
+  if [[ -d "$SCRIPT_DIR/agents" ]]; then
+    cp "$SCRIPT_DIR"/agents/banneker-*.md "$TARGET_DIR/.opencode/agents/"
   fi
 }
 
