@@ -12,14 +12,20 @@ set -euo pipefail
 # Environment Variables:
 #   TARGET_DIR       - Path to the repository to analyze (required)
 #   OUTPUT_DIR       - Where to store results (default: ./banneker-output/<target-name>)
-#   BANNEKER_STEPS   - Comma-separated steps to run (default: document,architect)
+#   BANNEKER_STEPS   - Comma-separated steps to run (default: all pipeline-ready steps)
+#   MINIMAL          - Set to "true" to run only document,architect,audit
 #   OPENCODE_BIN     - Path to opencode binary (default: opencode)
 
 TARGET_DIR="${TARGET_DIR:?ERROR: TARGET_DIR is required}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_NAME="$(basename "$TARGET_DIR")"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRIPT_DIR/banneker-output/$TARGET_NAME}"
-BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect,audit,roadmap,appendix,engineer,feed,plat}"
+MINIMAL="${MINIMAL:-false}"
+if [[ "$MINIMAL" == "true" ]]; then
+  BANNEKER_STEPS="document,architect,audit"
+else
+  BANNEKER_STEPS="${BANNEKER_STEPS:-document,architect,audit,roadmap,appendix,engineer,feed,plat}"
+fi
 OPENCODE_BIN="${OPENCODE_BIN:-opencode}"
 
 log() { echo "==> $*"; }
