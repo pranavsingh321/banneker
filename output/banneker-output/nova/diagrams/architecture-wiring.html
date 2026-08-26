@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture Wiring Diagram — OpenStack Nova</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg-card: #1a1d27;
+      --bg-card-alt: #151822;
+      --border: #2a2e3d;
+      --text: #c9cdd8;
+      --text-bright: #e8eaf0;
+      --text-dim: #6b7280;
+      --accent-blue: #4f8ff7;
+      --accent-cyan: #36d6c3;
+      --accent-green: #34d399;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-purple: #a78bfa;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #wiring-svg {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    #tooltip {
+      position: absolute;
+      display: none;
+      background: var(--bg-card);
+      border: 1px solid var(--accent-blue);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    #tooltip .tt-title {
+      color: var(--text-bright);
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+
+    #tooltip .tt-detail {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+
+    #legend {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: rgba(21,24,34,0.92);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      z-index: 100;
+    }
+
+    #legend div {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+    }
+
+    #legend div:last-child { margin-bottom: 0; }
+
+    .legend-line {
+      width: 20px;
+      height: 2px;
+      flex-shrink: 0;
+    }
+
+    .legend-dash {
+      background: repeating-linear-gradient(90deg, var(--accent-purple) 0, var(--accent-purple) 4px, transparent 4px, transparent 7px);
+    }
+
+    .legend-solid {
+      background: var(--accent-cyan);
+    }
+
+    .legend-highlight {
+      background: var(--accent-blue);
+      height: 3px;
+    }
+  </style>
+</head>
+<body>
+  <svg id="wiring-svg"></svg>
+  <div id="tooltip"></div>
+  <div id="legend">
+    <div><div class="legend-line legend-solid"></div> RPC / API connections</div>
+    <div><div class="legend-line legend-dash"></div> External service calls</div>
+    <div><div class="legend-line legend-highlight"></div> Highlighted (click to select)</div>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      var svg = document.getElementById('wiring-svg');
+      var tooltip = document.getElementById('tooltip');
+      var canvasW = 1300;
+      var canvasH = 720;
+      svg.setAttribute('viewBox', '0 0 ' + canvasW + ' ' + canvasH);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+      // Arrow markers
+      var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+      var markers = [
+        { id: 'arr-cyan', color: '#36d6c3' },
+        { id: 'arr-blue', color: '#4f8ff7' },
+        { id: 'arr-purple', color: '#a78bfa' },
+        { id: 'arr-green', color: '#34d399' },
+        { id: 'arr-orange', color: '#f59e0b' }
+      ];
+
+      markers.forEach(function(m) {
+        var marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', m.id);
+        marker.setAttribute('markerWidth', '10');
+        marker.setAttribute('markerHeight', '7');
+        marker.setAttribute('refX', '9');
+        marker.setAttribute('refY', '3.5');
+        marker.setAttribute('orient', 'auto');
+        var poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', '0 0, 10 3.5, 0 7');
+        poly.setAttribute('fill', m.color);
+        marker.appendChild(poly);
+        defs.appendChild(marker);
+      });
+
+      // Node shadow filter
+      var filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+      filter.setAttribute('id', 'shadow');
+      filter.setAttribute('x', '-20%');
+      filter.setAttribute('y', '-20%');
+      filter.setAttribute('width', '140%');
+      filter.setAttribute('height', '140%');
+      var feBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+      feBlur.setAttribute('in', 'SourceAlpha');
+      feBlur.setAttribute('stdDeviation', '3');
+      filter.appendChild(feBlur);
+      var feOffset = document.createElementNS('http://www.w3.org/2000/svg', 'feOffset');
+      feOffset.setAttribute('dx', '0');
+      feOffset.setAttribute('dy', '2');
+      filter.appendChild(feOffset);
+      var feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+      var mn1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+      mn1.setAttribute('in', 'Blur');
+      feMerge.appendChild(mn1);
+      var mn2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+      mn2.setAttribute('in', 'SourceGraphic');
+      feMerge.appendChild(mn2);
+      filter.appendChild(feMerge);
+      defs.appendChild(filter);
+
+      svg.appendChild(defs);
+
+      // Background grid pattern
+      var gridPattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+      gridPattern.setAttribute('id', 'grid');
+      gridPattern.setAttribute('width', '40');
+      gridPattern.setAttribute('height', '40');
+      gridPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+      var gridLineH = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      gridLineH.setAttribute('x1', '0'); gridLineH.setAttribute('y1', '40');
+      gridLineH.setAttribute('x2', '40'); gridLineH.setAttribute('y2', '40');
+      gridLineH.setAttribute('stroke', '#1a1d27');
+      gridLineH.setAttribute('stroke-width', '0.5');
+      var gridLineV = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      gridLineV.setAttribute('x1', '40'); gridLineV.setAttribute('y1', '0');
+      gridLineV.setAttribute('x2', '40'); gridLineV.setAttribute('y2', '40');
+      gridLineV.setAttribute('stroke', '#1a1d27');
+      gridLineV.setAttribute('stroke-width', '0.5');
+      gridPattern.appendChild(gridLineH);
+      gridPattern.appendChild(gridLineV);
+      defs.appendChild(gridPattern);
+
+      var bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('width', canvasW);
+      bgRect.setAttribute('height', canvasH);
+      bgRect.setAttribute('fill', '#0f1117');
+      svg.appendChild(bgRect);
+
+      var gridRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      gridRect.setAttribute('width', canvasW);
+      gridRect.setAttribute('height', canvasH);
+      gridRect.setAttribute('fill', 'url(#grid)');
+      svg.appendChild(gridRect);
+
+      // Component definitions
+      var components = [
+        { id: 'admin', name: 'Cloud Admin', shortName: 'Admin', x: 60, y: 30, w: 150, h: 50, type: 'actor', icon: '\u{1F468}\u200D\u{1F4BC}', color: '#a78bfa', tech: 'nova-manage, nova-status' },
+        { id: 'user', name: 'Cloud User', shortName: 'User', x: 260, y: 30, w: 150, h: 50, type: 'actor', icon: '\u{1F464}', color: '#a78bfa', tech: 'OS CLI, SDK, Browser' },
+        { id: 'keystone', name: 'Keystone', shortName: 'Keystone', x: 470, y: 30, w: 130, h: 50, type: 'auth', icon: '\u26A5', color: '#a78bfa', tech: 'Token auth, RBAC, policy enforcement' },
+        { id: 'rest-api', name: 'REST API Gateway', shortName: 'REST API', x: 670, y: 25, w: 160, h: 60, type: 'gateway', icon: '\u26DF', color: '#36d6c3', tech: 'WSGI, PasteDeploy, Routes, microversion 2.104' },
+        { id: 'scheduler', name: 'nova-scheduler', shortName: 'Scheduler', x: 100, y: 160, w: 160, h: 60, type: 'daemon', icon: '\u25B2', color: '#34d399', tech: '19 pluggable filters, weight plugins via Stevedore' },
+        { id: 'conductor', name: 'nova-conductor', shortName: 'Conductor', x: 370, y: 160, w: 160, h: 60, type: 'daemon', icon: '\u2699\uFE0F', color: '#36d6c3', tech: 'DB access, cell routing, resource coordination' },
+        { id: 'compute', name: 'nova-compute', shortName: 'Compute', x: 650, y: 160, w: 160, h: 60, type: 'daemon', icon: '\u26A1', color: '#4f8ff7', tech: 'Libvirt/KVM, virt drivers, VM lifecycle' },
+        { id: 'novncproxy', name: 'nova-novncproxy', shortName: 'noVNC', x: 100, y: 310, w: 160, h: 55, type: 'daemon', icon: '\u{1F5A5}', color: '#f59e0b', tech: 'VNC/Spice proxy, WebSocket tunneling' },
+        { id: 'placement-api', name: 'nova-placement-api', shortName: 'Placement API', x: 370, y: 310, w: 160, h: 55, type: 'daemon', icon: '\u267F', color: '#34d399', tech: 'Resource provider tracking, allocations table' },
+        { id: 'rabbitmq', name: 'RabbitMQ Bus', shortName: 'RabbitMQ', x: 650, y: 310, w: 160, h: 55, type: 'messaging', icon: '\u{1F4E7}', color: '#34d399', tech: 'oslo.messaging, Kombu, RPC queues' },
+        { id: 'glance', name: 'Glance', shortName: 'Glance', x: 100, y: 460, w: 140, h: 50, type: 'external', icon: '\u{1F305}', color: '#a78bfa', tech: 'VM disk images, metadata, image caching' },
+        { id: 'neutron', name: 'Neutron', shortName: 'Neutron', x: 300, y: 460, w: 140, h: 50, type: 'external', icon: '\u{1F310}', color: '#a78bfa', tech: 'Virtual networks, security groups, ports' },
+        { id: 'cinder', name: 'Cinder', shortName: 'Cinder', x: 500, y: 460, w: 140, h: 50, type: 'external', icon: '\u{1F4AE}', color: '#a78bfa', tech: 'Block storage, iSCSI/FC volume attachment' },
+        { id: 'plm-ext', name: 'Placement Service', shortName: 'Placement', x: 720, y: 460, w: 140, h: 50, type: 'external', icon: '\u{1F4C2}', color: '#34d399', tech: 'Resource utilization, custom resource classes' },
+        { id: 'postgresql', name: 'PostgreSQL', shortName: 'PostgreSQL', x: 350, y: 600, w: 150, h: 50, type: 'datastore', icon: '\u{1F5E0}\uFE0F', color: '#f59e0b', tech: 'Primary DB, 65 versioned object classes' },
+        { id: 'mysql', name: 'MySQL/MariaDB', shortName: 'MySQL', x: 560, y: 600, w: 150, h: 50, type: 'datastore', icon: '\u{1F5E3}\uFE0F', color: '#f59e0b', tech: 'Alternative production database' },
+        { id: 'barbican', name: 'Barbican', shortName: 'Barbican', x: 920, y: 460, w: 140, h: 50, type: 'external', icon: '\u{1F512}', color: '#a78bfa', tech: 'Cryptographic key management via castellan' }
+      ];
+
+      // Connection definitions
+      var connections = [
+        { from: 'user', to: 'rest-api', label: 'REST API Calls', color: 'cyan', type: 'solid', width: 2 },
+        { from: 'user', to: 'keystone', label: 'Token Request', color: 'purple', type: 'dashed', width: 1.5 },
+        { from: 'keystone', to: 'rest-api', label: 'Auth Tokens + Context', color: 'purple', type: 'dashed', width: 1.5 },
+        { from: 'rest-api', to: 'conductor', label: 'RPC Requests', color: 'cyan', type: 'solid', width: 2 },
+        { from: 'conductor', to: 'scheduler', label: 'Schedule Request', color: 'green', type: 'solid', width: 2 },
+        { from: 'scheduler', to: 'conductor', label: 'Host Selection', color: 'green', type: 'solid', width: 1.5, dash: '6,3' },
+        { from: 'conductor', to: 'compute', label: 'Build / Migrate / Resize', color: 'cyan', type: 'solid', width: 2.5 },
+        { from: 'compute', to: 'glance', label: 'Download Image', color: 'purple', type: 'dashed', width: 1.5 },
+        { from: 'compute', to: 'neutron', label: 'Create Port / IP', color: 'purple', type: 'dashed', width: 1.5 },
+        { from: 'compute', to: 'cinder', label: 'Attach Volume', color: 'purple', type: 'dashed', width: 1.5 },
+        { from: 'compute', to: 'plm-ext', label: 'Resource Allocation', color: 'green', type: 'solid', width: 1.5 },
+        { from: 'placement-api', to: 'plm-ext', label: 'Track Resources', color: 'green', type: 'solid', width: 1.5 },
+        { from: 'novncproxy', to: 'compute', label: 'VNC Tunnel (WebSocket)', color: 'orange', type: 'solid', width: 1.5 },
+        { from: 'compute', to: 'rabbitmq', label: 'RPC: heartbeat, tasks', color: 'green', type: 'solid', width: 1.5, dash: '4,3' },
+        { from: 'conductor', to: 'rabbitmq', label: 'RPC: cell routing', color: 'green', type: 'solid', width: 1.5, dash: '4,3' },
+        { from: 'scheduler', to: 'rabbitmq', label: 'RPC: build requests', color: 'green', type: 'solid', width: 1.5, dash: '4,3' },
+        { from: 'novncproxy', to: 'rabbitmq', label: 'RPC: console requests', color: 'green', type: 'solid', width: 1.5, dash: '4,3' },
+        { from: 'conductor', to: 'postgresql', label: 'SQL Queries / ORM', color: 'orange', type: 'solid', width: 2 },
+        { from: 'compute', to: 'postgresql', label: 'Instance updates', color: 'orange', type: 'solid', width: 1.5 },
+        { from: 'scheduler', to: 'postgresql', label: 'Shadow instance data', color: 'orange', type: 'solid', width: 1.5 }
+      ];
+
+      // Helper: find component by id
+      function findComp(id) {
+        return components.find(function(c) { return c.id === id; });
+      }
+
+      // Helper: get center of component
+      function center(comp) {
+        return { x: comp.x + comp.w / 2, y: comp.y + comp.h / 2 };
+      }
+
+      // Helper: get edge point on component boundary
+      function edgePoint(comp, targetX, targetY) {
+        var cx = comp.x + comp.w / 2;
+        var cy = comp.y + comp.h / 2;
+        var dx = targetX - cx;
+        var dy = targetY - cy;
+        var absDx = Math.abs(dx);
+        var absDy = Math.abs(dy);
+        var ratio;
+        if (absDx / (comp.w / 2) > absDy / (comp.h / 2)) {
+          ratio = (comp.w / 2) / absDx;
+        } else {
+          ratio = (comp.h / 2) / absDy;
+        }
+        return { x: cx + dx * ratio, y: cy + dy * ratio };
+      }
+
+      // Render component nodes
+      var nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      nodeGroup.setAttribute('class', 'nodes');
+      svg.appendChild(nodeGroup);
+
+      var allNodeG = [];
+
+      components.forEach(function(comp) {
+        var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'component-node');
+        g.setAttribute('data-id', comp.id);
+        g.setAttribute('transform', 'translate(' + comp.x + ', ' + comp.y + ')');
+
+        // Background rect
+        var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('width', comp.w);
+        rect.setAttribute('height', comp.h);
+        rect.setAttribute('rx', '8');
+        rect.setAttribute('fill', '#1a1d27');
+        rect.setAttribute('stroke', '#2a2e3d');
+        rect.setAttribute('stroke-width', '2');
+        rect.setAttribute('filter', 'url(#shadow)');
+        g.appendChild(rect);
+
+        // Top accent bar
+        var accent = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        accent.setAttribute('width', comp.w);
+        accent.setAttribute('height', '3');
+        accent.setAttribute('rx', '1.5');
+        accent.setAttribute('fill', comp.color);
+        accent.setAttribute('y', '0');
+        g.appendChild(accent);
+
+        // Icon
+        var iconText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        iconText.setAttribute('x', '16');
+        iconText.setAttribute('y', comp.h / 2 + 6);
+        iconText.setAttribute('font-size', '16');
+        iconText.setAttribute('fill', comp.color);
+        iconText.textContent = comp.icon;
+        g.appendChild(iconText);
+
+        // Name
+        var nameText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        nameText.setAttribute('x', '36');
+        nameText.setAttribute('y', comp.h / 2 + 1);
+        nameText.setAttribute('fill', '#e8eaf0');
+        nameText.setAttribute('font-size', '13');
+        nameText.setAttribute('font-weight', '600');
+        nameText.textContent = comp.name;
+        g.appendChild(nameText);
+
+        // Type badge
+        var typeLabels = {
+          actor: 'Human', auth: 'Auth', gateway: 'WSGI',
+          daemon: 'Daemon', messaging: 'Messaging',
+          external: 'External', datastore: 'Data'
+        };
+        var badgeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        badgeText.setAttribute('x', comp.w - 10);
+        badgeText.setAttribute('y', comp.h / 2 + 1);
+        badgeText.setAttribute('text-anchor', 'end');
+        badgeText.setAttribute('fill', comp.color);
+        badgeText.setAttribute('font-size', '9');
+        badgeText.setAttribute('font-weight', '600');
+        badgeText.textContent = typeLabels[comp.type] || comp.type;
+        g.appendChild(badgeText);
+
+        nodeGroup.appendChild(g);
+        allNodeG.push(g);
+
+        // Store references
+        comp.rectEl = rect;
+        comp.gEl = g;
+      });
+
+      // Render connections
+      var connGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      connGroup.setAttribute('class', 'connections');
+      svg.insertBefore(connGroup, nodeGroup);
+
+      var colorMap = {
+        cyan: '#36d6c3',
+        blue: '#4f8ff7',
+        purple: '#a78bfa',
+        green: '#34d399',
+        orange: '#f59e0b'
+      };
+
+      var arrowMap = {
+        cyan: 'arr-cyan',
+        blue: 'arr-blue',
+        purple: 'arr-purple',
+        green: 'arr-green',
+        orange: 'arr-orange'
+      };
+
+      connections.forEach(function(conn) {
+        var fromComp = findComp(conn.from);
+        var toComp = findComp(conn.to);
+        if (!fromComp || !toComp) return;
+
+        var fromEdge = edgePoint(fromComp, toComp.x + toComp.w / 2, toComp.y + toComp.h / 2);
+        var toEdge = edgePoint(toComp, fromComp.x + fromComp.w / 2, fromComp.y + fromComp.h / 2);
+
+        // Curved path
+        var midX = (fromEdge.x + toEdge.x) / 2;
+        var midY = (fromEdge.y + toEdge.y) / 2 - 20;
+        var d = 'M ' + fromEdge.x + ' ' + fromEdge.y + ' Q ' + midX + ' ' + midY + ' ' + toEdge.x + ' ' + toEdge.y;
+
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('stroke', colorMap[conn.color] || '#36d6c3');
+        path.setAttribute('stroke-width', conn.width || 2);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('marker-end', 'url(#' + (arrowMap[conn.color] || 'arr-cyan') + ')');
+        if (conn.dash) {
+          path.setAttribute('stroke-dasharray', conn.dash);
+        }
+        path.setAttribute('data-from', conn.from);
+        path.setAttribute('data-to', conn.to);
+        path.setAttribute('class', 'conn-path');
+        connGroup.appendChild(path);
+        conn.pathEl = path;
+
+        // Label
+        var label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', midX);
+        label.setAttribute('y', midY - 6);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('fill', '#6b7280');
+        label.setAttribute('font-size', '9');
+        label.setAttribute('font-family', "'Courier New', monospace");
+        label.textContent = conn.label;
+        connGroup.appendChild(label);
+        conn.labelEl = label;
+      });
+
+      // Title
+      var titleGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      titleGroup.setAttribute('transform', 'translate(20, 22)');
+      var titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      titleText.setAttribute('fill', '#e8eaf0');
+      titleText.setAttribute('font-size', '18');
+      titleText.setAttribute('font-weight', '700');
+      titleText.textContent = 'Architecture Wiring Diagram — OpenStack Nova';
+      titleGroup.appendChild(titleText);
+
+      var subtitleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      subtitleText.setAttribute('y', '22');
+      subtitleText.setAttribute('fill', '#6b7280');
+      subtitleText.setAttribute('font-size', '11');
+      subtitleText.textContent = 'Click a component to highlight its connections • Hover for details';
+      titleGroup.appendChild(subtitleText);
+      svg.appendChild(titleGroup);
+
+      // Row labels
+      var rowLabels = [
+        { y: 10, label: 'Actors & Authentication' },
+        { y: 150, label: 'Core Daemons' },
+        { y: 300, label: 'Coordination & Messaging' },
+        { y: 450, label: 'External OpenStack Services' },
+        { y: 590, label: 'Data Stores' }
+      ];
+
+      rowLabels.forEach(function(rl) {
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', '10');
+        line.setAttribute('y1', rl.y);
+        line.setAttribute('x2', canvasW - 10);
+        line.setAttribute('y2', rl.y);
+        line.setAttribute('stroke', '#1a1d27');
+        line.setAttribute('stroke-width', '1');
+        line.setAttribute('stroke-dasharray', '8,4');
+        svg.appendChild(line);
+
+        var rLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        rLabel.setAttribute('x', '14');
+        rLabel.setAttribute('y', rl.y - 5);
+        rLabel.setAttribute('fill', '#2a2e3d');
+        rLabel.setAttribute('font-size', '9');
+        rLabel.setAttribute('font-weight', '700');
+        rLabel.setAttribute('letter-spacing', '0.08em');
+        rLabel.setAttribute('text-transform', 'uppercase');
+        rLabel.textContent = rl.label;
+        svg.appendChild(rLabel);
+      });
+
+      // Interactivity
+      var selectedNode = null;
+
+      function resetHighlights() {
+        allNodeG.forEach(function(g) {
+          var r = g.querySelector('rect');
+          if (r) {
+            r.setAttribute('stroke', '#2a2e3d');
+            r.setAttribute('stroke-width', '2');
+          }
+          g.style.opacity = '1';
+        });
+
+        connections.forEach(function(conn) {
+          if (conn.pathEl) {
+            conn.pathEl.setAttribute('stroke', colorMap[conn.color] || '#36d6c3');
+            conn.pathEl.setAttribute('stroke-width', conn.width || 2);
+            conn.pathEl.style.opacity = '0.6';
+          }
+          if (conn.labelEl) {
+            conn.labelEl.style.opacity = '0.4';
+          }
+        });
+      }
+
+      function highlightComponent(compId) {
+        resetHighlights();
+
+        connections.forEach(function(conn) {
+          if (conn.pathEl) {
+            if (conn.from === compId || conn.to === compId) {
+              conn.pathEl.setAttribute('stroke', '#4f8ff7');
+              conn.pathEl.setAttribute('stroke-width', (conn.width || 2) + 1);
+              conn.pathEl.style.opacity = '1';
+            } else {
+              conn.pathEl.style.opacity = '0.2';
+            }
+          }
+          if (conn.labelEl) {
+            if (conn.from === compId || conn.to === compId) {
+              conn.labelEl.setAttribute('fill', '#4f8ff7');
+              conn.labelEl.style.opacity = '1';
+            } else {
+              conn.labelEl.style.opacity = '0.15';
+            }
+          }
+        });
+
+        allNodeG.forEach(function(g) {
+          var r = g.querySelector('rect');
+          if (r) {
+            var id = g.getAttribute('data-id');
+            if (id === compId) {
+              r.setAttribute('stroke', '#4f8ff7');
+              r.setAttribute('stroke-width', '3');
+            } else {
+              g.style.opacity = '0.4';
+            }
+          }
+        });
+
+        // Highlight connected nodes
+        connections.forEach(function(conn) {
+          if (conn.from === compId) {
+            var other = conn.to;
+            var node = document.querySelector('.component-node[data-id="' + other + '"]');
+            if (node) node.style.opacity = '1';
+          }
+          if (conn.to === compId) {
+            var other = conn.from;
+            var node = document.querySelector('.component-node[data-id="' + other + '"]');
+            if (node) node.style.opacity = '1';
+          }
+        });
+      }
+
+      function showTooltip(comp, evt) {
+        var tt = tooltip;
+        tt.innerHTML = '<div class="tt-title">' + comp.icon + ' ' + comp.name + '</div><div class="tt-detail">' + comp.tech + '</div><div class="tt-detail" style="margin-top:0.25rem;">Type: ' + (comp.type.charAt(0).toUpperCase() + comp.type.slice(1)) + '</div>';
+        tt.style.display = 'block';
+        updateTooltipPosition(evt);
+      }
+
+      function hideTooltip() {
+        tooltip.style.display = 'none';
+      }
+
+      function updateTooltipPosition(evt) {
+        var tt = tooltip;
+        var x = evt.clientX + 15;
+        var y = evt.clientY + 15;
+        if (x + 280 > window.innerWidth) x = evt.clientX - 290;
+        if (y + 80 > window.innerHeight) y = evt.clientY - 90;
+        tt.style.left = x + 'px';
+        tt.style.top = y + 'px';
+      }
+
+      // Event listeners
+      allNodeG.forEach(function(g) {
+        var compId = g.getAttribute('data-id');
+        var comp = findComp(compId);
+
+        g.addEventListener('click', function(evt) {
+          if (selectedNode === compId) {
+            selectedNode = null;
+            resetHighlights();
+          } else {
+            selectedNode = compId;
+            highlightComponent(compId);
+          }
+          evt.stopPropagation();
+        });
+
+        g.addEventListener('mouseenter', function(evt) {
+          if (!selectedNode || selectedNode === compId) {
+            g.querySelector('rect').setAttribute('stroke', comp.color);
+            g.querySelector('rect').setAttribute('stroke-width', '2.5');
+          }
+          showTooltip(comp, evt);
+        });
+
+        g.addEventListener('mousemove', function(evt) {
+          updateTooltipPosition(evt);
+        });
+
+        g.addEventListener('mouseleave', function() {
+          if (selectedNode === compId) {
+            g.querySelector('rect').setAttribute('stroke', '#4f8ff7');
+            g.querySelector('rect').setAttribute('stroke-width', '3');
+          } else {
+            g.querySelector('rect').setAttribute('stroke', '#2a2e3d');
+            g.querySelector('rect').setAttribute('stroke-width', '2');
+          }
+          hideTooltip();
+        });
+      });
+
+      // Click background to deselect
+      svg.addEventListener('click', function() {
+        selectedNode = null;
+        resetHighlights();
+      });
+    })();
+  </script>
+</body>
+</html>

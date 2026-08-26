@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Executive Roadmap — OpenStack Nova</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg-card: #1a1d27;
+      --bg-card-alt: #151822;
+      --border: #2a2e3d;
+      --text: #c9cdd8;
+      --text-bright: #e8eaf0;
+      --text-dim: #6b7280;
+      --accent-blue: #4f8ff7;
+      --accent-cyan: #36d6c3;
+      --accent-green: #34d399;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-purple: #a78bfa;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      margin: 0;
+      padding: 2rem;
+    }
+
+    h1 {
+      color: var(--text-bright);
+      margin-bottom: 0.5rem;
+    }
+
+    h2, h3, h4 {
+      color: var(--text-bright);
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      margin-bottom: 2.5rem;
+      max-width: 700px;
+    }
+
+    .phase-section {
+      margin-bottom: 3rem;
+    }
+
+    .phase-section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .phase-section-title .phase-num {
+      color: var(--accent-blue);
+      font-weight: 700;
+    }
+
+    .roadmap-timeline {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      padding: 1.5rem 0;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    /* The main horizontal line */
+    .roadmap-timeline::before {
+      content: '';
+      position: absolute;
+      top: 52px;
+      left: 24px;
+      right: 24px;
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
+    }
+
+    .milestone {
+      flex: 0 0 220px;
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 200px;
+    }
+
+    .milestone-marker {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      margin-bottom: 0.75rem;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .milestone-marker::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: var(--bg);
+    }
+
+    .milestone-marker.phase1 { background: var(--accent-blue); box-shadow: 0 0 0 4px rgba(79,143,247,0.2); }
+    .milestone-marker.phase2 { background: var(--accent-cyan); box-shadow: 0 0 0 4px rgba(54,214,195,0.2); }
+    .milestone-marker.phase3 { background: var(--accent-green); box-shadow: 0 0 0 4px rgba(52,211,153,0.2); }
+    .milestone-marker.phase4 { background: var(--accent-orange); box-shadow: 0 0 0 4px rgba(245,158,11,0.2); }
+    .milestone-marker.phase5 { background: var(--accent-purple); box-shadow: 0 0 0 4px rgba(167,139,250,0.2); }
+
+    .milestone-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      width: 100%;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+
+    .milestone-card:hover {
+      border-color: var(--accent-blue);
+    }
+
+    .phase-number {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.25rem;
+    }
+
+    .phase1 .phase-number { color: var(--accent-blue); }
+    .phase2 .phase-number { color: var(--accent-cyan); }
+    .phase3 .phase-number { color: var(--accent-green); }
+    .phase4 .phase-number { color: var(--accent-orange); }
+    .phase5 .phase-number { color: var(--accent-purple); }
+
+    .phase-name {
+      color: var(--text-bright);
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      line-height: 1.3;
+    }
+
+    .phase-desc {
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      line-height: 1.4;
+      margin-bottom: 0.5rem;
+    }
+
+    .phase-requirements {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      justify-content: center;
+    }
+
+    .req-tag {
+      font-size: 0.68rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 3px;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .phase1 .req-tag { border-color: rgba(79,143,247,0.3); color: var(--accent-blue); }
+    .phase2 .req-tag { border-color: rgba(54,214,195,0.3); color: var(--accent-cyan); }
+    .phase3 .req-tag { border-color: rgba(52,211,153,0.3); color: var(--accent-green); }
+    .phase4 .req-tag { border-color: rgba(245,158,11,0.3); color: var(--accent-orange); }
+    .phase5 .req-tag { border-color: rgba(167,139,250,0.3); color: var(--accent-purple); }
+
+    .decisions-section {
+      margin-top: 3rem;
+    }
+
+    .decisions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .decision-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.85rem 1rem;
+    }
+
+    .decision-card .decision-id {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      margin-bottom: 0.3rem;
+      font-family: 'Courier New', monospace;
+    }
+
+    .decision-card .decision-title {
+      color: var(--text-bright);
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .decision-card .decision-text {
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .stat-bar {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1.25rem;
+      text-align: center;
+      min-width: 120px;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 0.15rem;
+    }
+
+    .footer-note {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1><span style="color: var(--accent-blue);">Executive Roadmap</span> — OpenStack Nova</h1>
+    <p class="subtitle">OpenStack's distributed compute service that manages the lifecycle of instances across multi-cell cloud deployments. Phases derived from architectural survey and walkthrough analysis.</p>
+
+    <div class="stat-bar">
+      <div class="stat-item">
+        <div class="stat-value">12</div>
+        <div class="stat-label">Architecture Decisions</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">5</div>
+        <div class="stat-label">Walkthroughs</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">2.104</div>
+        <div class="stat-label">Current API Microversion</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">3</div>
+        <div class="stat-label">Core Daemons</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">8</div>
+        <div class="stat-label">Service Integrations</div>
+      </div>
+    </div>
+
+    <div class="phase-section">
+      <div class="phase-section-title"><span class="phase-num">Phase Map</span> — Service Layering &amp; Delivery Order</div>
+      <div class="roadmap-timeline">
+        <div class="milestone phase1">
+          <div class="milestone-marker phase1"></div>
+          <div class="milestone-card">
+            <div class="phase-number">Phase 1</div>
+            <div class="phase-name">API Gateway &amp; Identity</div>
+            <div class="phase-desc">WSGI pipeline, Keystone authentication, microversioned REST API surface, policy enforcement via oslo.policy</div>
+            <div class="phase-requirements">
+              <span class="req-tag">DEC-003</span>
+              <span class="req-tag">DEC-007</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="milestone phase2">
+          <div class="milestone-marker phase2"></div>
+          <div class="milestone-card">
+            <div class="phase-number">Phase 2</div>
+            <div class="phase-name">Data Layer &amp; Modeling</div>
+            <div class="phase-desc">SQLAlchemy ORM, Shadow tables, 65 versioned object classes, Alembic migrations, oslo.db sessions</div>
+            <div class="phase-requirements">
+              <span class="req-tag">DEC-002</span>
+              <span class="req-tag">DEC-012</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="milestone phase3">
+          <div class="milestone-marker phase3"></div>
+          <div class="milestone-card">
+            <div class="phase-number">Phase 3</div>
+            <div class="phase-name">Compute Orchestration</div>
+            <div class="phase-desc">nova-compute daemon, virt drivers, RPC messaging via oslo.messaging + RabbitMQ, privilege separation</div>
+            <div class="phase-requirements">
+              <span class="req-tag">DEC-001</span>
+              <span class="req-tag">DEC-004</span>
+              <span class="req-tag">DEC-009</span>
+              <span class="req-tag">DEC-010</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="milestone phase4">
+          <div class="milestone-marker phase4"></div>
+          <div class="milestone-card">
+            <div class="phase-number">Phase 4</div>
+            <div class="phase-name">Scheduling &amp; Coordination</div>
+            <div class="phase-desc">nova-scheduler with pluggable filters, Placement resource tracking, Conductor routing, cursive state machine</div>
+            <div class="phase-requirements">
+              <span class="req-tag">DEC-008</span>
+              <span class="req-tag">DEC-011</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="milestone phase5">
+          <div class="milestone-marker phase5"></div>
+          <div class="milestone-card">
+            <div class="phase-number">Phase 5</div>
+            <div class="phase-name">Scale &amp; Operations</div>
+            <div class="phase-desc">Cells v2 architecture, eventlet concurrency, Ansible/Devstack deployment, Zuul CI/CD, monitoring</div>
+            <div class="phase-requirements">
+              <span class="req-tag">DEC-005</span>
+              <span class="req-tag">DEC-006</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-section">
+      <div class="phase-section-title"><span class="phase-num" style="color: var(--accent-cyan);">Walkthrough Coverage</span> — User Journeys Mapped</div>
+      <div class="roadmap-timeline">
+        <div class="milestone phase1">
+          <div class="milestone-marker phase1"></div>
+          <div class="milestone-card">
+            <div class="phase-name" style="font-size:0.85rem;">Boot a Server</div>
+            <div class="phase-desc">POST /servers → Keystone auth → API validation → Scheduler → Conductor → Compute → VM spawn</div>
+          </div>
+        </div>
+        <div class="milestone phase2">
+          <div class="milestone-marker phase2"></div>
+          <div class="milestone-card">
+            <div class="phase-name" style="font-size:0.85rem;">Live Migrate</div>
+            <div class="phase-desc">Migrate action → cursive state machine → memory pre-copy → switchover → Placement swap</div>
+          </div>
+        </div>
+        <div class="milestone phase3">
+          <div class="milestone-marker phase3"></div>
+          <div class="milestone-card">
+            <div class="phase-name" style="font-size:0.85rem;">Resize Instance</div>
+            <div class="phase-desc">Change flavor → allocate dest resources → powered-off migration → disk resize → confirm/revert</div>
+          </div>
+        </div>
+        <div class="milestone phase4">
+          <div class="milestone-marker phase4"></div>
+          <div class="milestone-card">
+            <div class="phase-name" style="font-size:0.85rem;">List &amp; Filter</div>
+            <div class="phase-desc">GET /servers → microversion-aware → SQLAlchemy filtering → view serialization → pagination</div>
+          </div>
+        </div>
+        <div class="milestone phase5">
+          <div class="milestone-marker phase5"></div>
+          <div class="milestone-card">
+            <div class="phase-name" style="font-size:0.85rem;">noVNC Console</div>
+            <div class="phase-desc">Console ticket → nova-novncproxy → WebSocket tunnel → browser VNC viewer</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="decisions-section">
+      <div class="phase-section-title">All Architecture Decisions</div>
+      <div class="decisions-grid">
+        <div class="decision-card">
+          <div class="decision-id">DEC-001</div>
+          <div class="decision-title">Distributed Compute Orchestration</div>
+          <div class="decision-text">Three-process architecture: nova-compute, nova-conductor, nova-scheduler as separate daemons via RPC.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-002</div>
+          <div class="decision-title">Two-Layer Data Model</div>
+          <div class="decision-text">SQLAlchemy ORM with Shadow tables wrapped by oslo.versionedobjects for API-level versioning.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-003</div>
+          <div class="decision-title">REST API with Microversioning</div>
+          <div class="decision-text">WSGI REST over JSON with X-OpenStack-Nova-API-Version header (base 2.1, current 2.104).</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-004</div>
+          <div class="decision-title">Default Virtualization Driver</div>
+          <div class="decision-text">Libvirt (KVM/QEMU) as default; VMware, ZVM, Ironic via Stevedore pluggable drivers.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-005</div>
+          <div class="decision-title">Horizontal Scaling via Cells v2</div>
+          <div class="decision-text">Cell0 metadata database + Cell1+ with independent DB, conductor, and compute hosts.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-006</div>
+          <div class="decision-title">Concurrency Model</div>
+          <div class="decision-text">Eventlet green threads as default, with native Python threading fallback.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-007</div>
+          <div class="decision-title">Authorization Framework</div>
+          <div class="decision-text">oslo.policy with 56 policy modules for fine-grained RBAC enforcement at API endpoints.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-008</div>
+          <div class="decision-title">Pluggable Scheduler Filters</div>
+          <div class="decision-text">19 scheduler filters and weight plugins via Stevedore entry points.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-009</div>
+          <div class="decision-title">Privilege Separation</div>
+          <div class="decision-text">oslo.privsep with oslo-rootwrap isolates privileged host operations from untrusted API code.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-010</div>
+          <div class="decision-title">Messaging Transport</div>
+          <div class="decision-text">oslo.messaging with RabbitMQ via Kombu — RPC between API, scheduler, conductor, and compute.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-011</div>
+          <div class="decision-title">Build Request Coordination</div>
+          <div class="decision-text">Scheduler → Conductor → Compute RPC chain with cursive state machine and TooZ locks.</div>
+        </div>
+        <div class="decision-card">
+          <div class="decision-id">DEC-012</div>
+          <div class="decision-title">Modular Configuration</div>
+          <div class="decision-text">48 config modules via oslo.config entry point with INI-style nova.conf.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Generated from OpenStack Nova survey data · 12 architecture decisions · 5 walkthroughs · 8 integrations
+    </div>
+  </div>
+</body>
+</html>

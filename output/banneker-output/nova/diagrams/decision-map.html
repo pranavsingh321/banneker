@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decision Map — OpenStack Nova</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg-card: #1a1d27;
+      --bg-card-alt: #151822;
+      --border: #2a2e3d;
+      --text: #c9cdd8;
+      --text-bright: #e8eaf0;
+      --text-dim: #6b7280;
+      --accent-blue: #4f8ff7;
+      --accent-cyan: #36d6c3;
+      --accent-green: #34d399;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-purple: #a78bfa;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      margin: 0;
+      padding: 2rem;
+    }
+
+    h1 { color: var(--text-bright); margin-bottom: 0.5rem; }
+    h2, h3, h4 { color: var(--text-bright); }
+
+    .page { max-width: 1400px; margin: 0 auto; }
+
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+
+    .domain-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 2rem;
+      padding: 1rem 0;
+    }
+
+    .domain-column {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .domain-header {
+      padding: 0.85rem 1.25rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .domain-icon {
+      font-size: 1.1rem;
+    }
+
+    .domain-count {
+      font-size: 0.72rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      font-weight: 600;
+      margin-left: auto;
+    }
+
+    /* Domain color themes */
+    .domain-infra .domain-header {
+      color: var(--accent-cyan);
+      border-bottom: 2px solid var(--accent-cyan);
+    }
+    .domain-data .domain-header {
+      color: var(--accent-blue);
+      border-bottom: 2px solid var(--accent-blue);
+    }
+    .domain-api .domain-header {
+      color: var(--accent-purple);
+      border-bottom: 2px solid var(--accent-purple);
+    }
+    .domain-compute .domain-header {
+      color: var(--accent-orange);
+      border-bottom: 2px solid var(--accent-orange);
+    }
+    .domain-scheduling .domain-header {
+      color: var(--accent-green);
+      border-bottom: 2px solid var(--accent-green);
+    }
+    .domain-general .domain-header {
+      color: var(--text-dim);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .domain-body {
+      padding: 1rem 1.25rem;
+    }
+
+    .decision-node {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+
+    .decision-node:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-1px);
+    }
+
+    .decision-node:last-child {
+      margin-bottom: 0;
+    }
+
+    .decision-id {
+      color: var(--accent-cyan);
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.03em;
+    }
+
+    .decision-question {
+      color: var(--text-bright);
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .decision-choice-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-cyan);
+      margin-bottom: 0.2rem;
+    }
+
+    .decision-choice {
+      color: var(--text);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin-bottom: 0.6rem;
+    }
+
+    .decision-alternatives {
+      border-top: 1px solid var(--border);
+      padding-top: 0.5rem;
+      margin-top: 0.35rem;
+    }
+
+    .alt-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-red);
+      margin-bottom: 0.2rem;
+    }
+
+    .alt-item {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 0.3rem;
+      padding-left: 0.75rem;
+      position: relative;
+      line-height: 1.4;
+    }
+
+    .alt-item::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--accent-red);
+    }
+
+    .phase-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      margin-top: 0.5rem;
+      font-family: 'Courier New', monospace;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .footer-note {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1><span style="color: var(--accent-cyan);">Decision Map</span> — OpenStack Nova Architecture</h1>
+    <p class="subtitle">All 12 architectural decisions organized by domain. Each decision captures the choice, rationale, and rejected alternatives.</p>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--accent-cyan);"></div>
+        <span>Infrastructure</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--accent-blue);"></div>
+        <span>Data &amp; Configuration</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--accent-purple);"></div>
+        <span>API &amp; Security</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--accent-orange);"></div>
+        <span>Compute</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--accent-green);"></div>
+        <span>Scheduling</span>
+      </div>
+    </div>
+
+    <div class="domain-grid">
+
+      <!-- INFRA -->
+      <div class="domain-column domain-infra">
+        <div class="domain-header">
+          <span class="domain-icon">&#9881;</span>
+          INFRA
+          <span class="domain-count">4 decisions</span>
+        </div>
+        <div class="domain-body">
+          <div class="decision-node">
+            <div class="decision-id">DEC-001</div>
+            <div class="decision-question">How should compute orchestration be distributed across processes?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Three-process distributed architecture: nova-compute, nova-conductor, and nova-scheduler run as separate daemons communicating via RPC (oslo.messaging).</div>
+            <div class="decision-alternatives">
+              <div class="alt-label">Rejected alternatives</div>
+              <div class="alt-item">Monolithic single-process Nova — would not scale horizontally; direct DB access creates security risks</div>
+              <div class="alt-item">Microservices with separate API per function — OpenStack ecosystem requires tight integration</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-005</div>
+            <div class="decision-question">How should Nova scale to support thousands of compute nodes?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Cells v2 architecture: Cell0 is metadata-only; Cell1+ each have their own database, conductor, and compute hosts.</div>
+            <div class="decision-alternatives">
+              <div class="alt-label">Rejected alternatives</div>
+              <div class="alt-item">Database partitioning — harder to manage, single point of failure for conductor</div>
+              <div class="alt-item">Fully distributed peer-to-peer — no centralized resource tracking or scheduling</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-006</div>
+            <div class="decision-question">What concurrency model should Nova use for handling requests?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Eventlet green threads as default, with native Python threading fallback.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Asyncio — oslo.* library ecosystem is built on eventlet; migrating would require rewriting the entire dependency chain</div>
+              <div class="alt-item">Thread-per-request — native threads consume more memory and OS resources</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-010</div>
+            <div class="decision-question">What is the messaging transport for inter-service RPC communication?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">oslo.messaging with RabbitMQ via Kombu as the default transport for RPC between API, scheduler, conductor, and compute.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">ZeroMQ — no message persistence; lost messages during broker restart would cause data inconsistency</div>
+              <div class="alt-item">Direct TCP connections — tight coupling, no message queuing semantics</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DATA -->
+      <div class="domain-column domain-data">
+        <div class="domain-header">
+          <span class="domain-icon">&#9638;</span>
+          DATA
+          <span class="domain-count">2 decisions</span>
+        </div>
+        <div class="domain-body">
+          <div class="decision-node">
+            <div class="decision-id">DEC-002</div>
+            <div class="decision-question">How should Nova manage its data models across API versions and database migrations?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Two-layer data model: SQLAlchemy ORM models with Shadow tables wrapped by oslo.versionedobjects (65 object classes).</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Single ORM model layer — would require DB migrations for every API change</div>
+              <div class="alt-item">Flat NoSQL data store — OpenStack services expect relational data with strong consistency</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-012</div>
+            <div class="decision-question">How should configuration options be organized across the codebase?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Modular config options in nova/conf/ (48 modules), aggregated via oslo.config entry point with INI-style nova.conf.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Single monolithic config file — 48+ subsystems make a single file unwieldy</div>
+              <div class="alt-item">YAML/JSON config — oslo.config supports existing OpenStack deployment tooling</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API -->
+      <div class="domain-column domain-api">
+        <div class="domain-header">
+          <span class="domain-icon">&#9206;</span>
+          API
+          <span class="domain-count">2 decisions</span>
+        </div>
+        <div class="domain-body">
+          <div class="decision-node">
+            <div class="decision-id">DEC-003</div>
+            <div class="decision-question">What is the REST API communication strategy and versioning approach?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">REST API over WSGI with microversioning (2.1 base, currently 2.104). URL routing via Routes with custom ProjectMapper. JSON-only response.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">URL-based versioning (/v1/, /v2/) — creates permanent endpoints that cannot be deprecated</div>
+              <div class="alt-item">GraphQL API — OpenStack ecosystem uses REST; would break existing SDKs</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-007</div>
+            <div class="decision-question">How should authorization be enforced across the API layer?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">oslo.policy with 56 policy modules defining fine-grained RBAC rules. Custom enforcer entry point at nova.policy.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Custom authorization framework — incompatible with existing OpenStack policy tools</div>
+              <div class="alt-item">ABAC — oslo.policy role-based rules are simpler to manage and audit</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPUTE -->
+      <div class="domain-column domain-compute">
+        <div class="domain-header">
+          <span class="domain-icon">&#9900;</span>
+          COMPUTE
+          <span class="domain-count">2 decisions</span>
+        </div>
+        <div class="domain-body">
+          <div class="decision-node">
+            <div class="decision-id">DEC-004</div>
+            <div class="decision-question">Which virtualization backend should be the default?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Libvirt (KVM/QEMU/LXC/Parallels) as default driver; VMware, IBM Z (ZVM), bare metal (Ironic) as optional Stevedore plugins.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Make all drivers first-class — bloats core with driver-specific code</div>
+              <div class="alt-item">Container-only runtime — VM workloads dominated cloud demand at design time</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-009</div>
+            <div class="decision-question">How should privileged operations be isolated from untrusted API code?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">oslo.privsep with privilege separation helpers. Privileged operations execute in a separate process via oslo-rootwrap.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Run nova-compute as unprivileged user — hypervisor operations require root</div>
+              <div class="alt-item">Sudo-based escalation — oslo.privsep is more secure and efficient</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCHEDULING -->
+      <div class="domain-column domain-scheduling">
+        <div class="domain-header">
+          <span class="domain-icon">&#9650;</span>
+          SCHEDULING
+          <span class="domain-count">2 decisions</span>
+        </div>
+        <div class="domain-body">
+          <div class="decision-node">
+            <div class="decision-id">DEC-008</div>
+            <div class="decision-question">How should Nova support pluggable scheduler filters and weight functions?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Stevedore entry points for 19 scheduler filters and weight plugins, with custom RequestFilter base class.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Hard-coded scheduler logic — would force one policy across heterogeneous deployments</div>
+              <div class="alt-item">External scheduler service — scheduling is latency-sensitive with placement data needs</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+
+          <div class="decision-node">
+            <div class="decision-id">DEC-011</div>
+            <div class="decision-question">How should build requests be coordinated between scheduler and compute?</div>
+            <div class="decision-choice-label">Choice</div>
+            <div class="decision-choice">Scheduler → Conductor → Compute RPC chain with cursive distributed state machine for live migration and TooZ lock groups.</div>
+            <div class="decision-alternatives">
+              <div class="alt-item">Direct Scheduler → Compute — bypasses conductor, losing DB consistency and cell routing</div>
+              <div class="alt-item">Synchronous build — blocks API threads during long-running VM provisioning</div>
+            </div>
+            <div class="phase-badge">backend</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer-note">
+      5 domains · 12 decisions · All decisions in backend phase · Generated from .banneker/architecture-decisions.json
+    </div>
+  </div>
+</body>
+</html>
