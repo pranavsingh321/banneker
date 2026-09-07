@@ -51,6 +51,7 @@ TARGET_DIR=~/repos/nova OUTPUT_DIR=~/reports/nova ./banneker-pipeline.sh
 | `roadmap` | Generate architecture diagrams (HTML) | `survey.json` |
 | `appendix` | Compile HTML reference site | Documents + diagrams |
 | `feed` | Export to downstream frameworks (incl. OKF bundle) | `survey.json` |
+| `okf` | Generate standalone OKF knowledge bundle | `survey.json` |
 | `audit` | Evaluate plans against completeness rubric | Planning documents |
 
 ## CLI (Interactive)
@@ -64,7 +65,8 @@ TARGET_DIR=~/repos/nova OUTPUT_DIR=~/reports/nova ./banneker-pipeline.sh
 
 Banneker can export all planning artifacts as an **OKF knowledge bundle** (`.banneker/knowledge/`), a version-controllable directory of concept files with YAML frontmatter. This gives downstream agents **progressive disclosure**: they browse the index (`okf_list`) and read only the concepts they need (`okf_read`/`okf_search`) instead of loading the whole corpus, then unload them later — ideal for limited-context models.
 
-- **Feed step**: `/banneker:feed` now generates the OKF bundle alongside GSD/prompt/summary/context-bundle exports.
+- **OKF command**: `/banneker:okf` generates a standalone OKF bundle from survey data (no architect step required). Ideal for context-efficient agent consumption.
+- **Feed step**: `/banneker:feed` generates the OKF bundle alongside GSD/prompt/summary/context-bundle exports.
 - **Plugin**: an `opencode-okf-context` plugin config ships in `opencode.json` + `.opencode/okf.jsonc` (tuned with sensible unload/nudge defaults for constrained machines).
 - **Skill**: `.opencode/skills/okf/` contains a SKILL.md that teaches agents how to author and consume OKF bundles, with `reference/` docs and helper scripts.
 

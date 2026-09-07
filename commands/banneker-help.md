@@ -79,6 +79,12 @@ Banneker transforms structured discovery interviews into engineering plans, arch
   - Framework-specific adapters for each format
   - All exports generated in single pass
 
+- **/banneker:okf** — Generate standalone OKF knowledge bundle
+  - Creates progressive-disclosure knowledge bundle from survey data only
+  - No architect step required — only needs survey.json + architecture-decisions.json
+  - Produces `.banneker/knowledge/` with concept files for context-efficient agent consumption
+  - Ideal for reducing model context by loading only needed concepts
+
 ### Utilities
 - **/banneker:help** — Display this command reference
   - Dynamically discovers installed commands
