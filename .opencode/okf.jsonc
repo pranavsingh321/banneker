@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "scan": { "enabled": true, "maxDepth": 4 },
+  "bundles": [{ "path": ".banneker/knowledge", "name": "banneker-kb" }],
+  "disclosure": { "injectManifest": true, "maxManifestChars": 2000 },
+  "unload": { "afterTurns": 3, "keepRecent": 2, "placeholder": "description" },
+  "nudge": { "threshold": 20000, "frequency": 3, "force": "soft" },
+  "write": { "enabled": true, "updateIndex": true, "appendLog": true },
+  "protectedConcepts": ["documents/*"],
+  "debug": false
+}

@@ -2,6 +2,8 @@
 
 Reusable scripts for [Banneker](https://www.npmjs.com/package/banneker) — analyze any codebase and generate architecture docs, diagrams, and planning artifacts.
 
+Optimized for large repositories and resource-constrained machines: the cartographer uses tiered/sampled analysis, the architect passes sliced context to writers instead of raw files, and artifacts can be exported as an OKF knowledge bundle for progressive disclosure (agents load only the concepts they need, keeping context small).
+
 ## Requirements
 
 - Node.js >= 18
@@ -48,7 +50,7 @@ TARGET_DIR=~/repos/nova OUTPUT_DIR=~/reports/nova ./banneker-pipeline.sh
 | `architect` | Generate planning documents | Auto-generates `survey.json` if missing |
 | `roadmap` | Generate architecture diagrams (HTML) | `survey.json` |
 | `appendix` | Compile HTML reference site | Documents + diagrams |
-| `feed` | Export to downstream frameworks | `survey.json` |
+| `feed` | Export to downstream frameworks (incl. OKF bundle) | `survey.json` |
 | `audit` | Evaluate plans against completeness rubric | Planning documents |
 
 ## CLI (Interactive)
@@ -56,6 +58,21 @@ TARGET_DIR=~/repos/nova OUTPUT_DIR=~/reports/nova ./banneker-pipeline.sh
 ```bash
 ./banneker-run.sh --target /path/to/project document
 ./banneker-run.sh --target /path/to/project all
+```
+
+## OKF (Open Knowledge Format) Integration
+
+Banneker can export all planning artifacts as an **OKF knowledge bundle** (`.banneker/knowledge/`), a version-controllable directory of concept files with YAML frontmatter. This gives downstream agents **progressive disclosure**: they browse the index (`okf_list`) and read only the concepts they need (`okf_read`/`okf_search`) instead of loading the whole corpus, then unload them later — ideal for limited-context models.
+
+- **Feed step**: `/banneker:feed` now generates the OKF bundle alongside GSD/prompt/summary/context-bundle exports.
+- **Plugin**: an `opencode-okf-context` plugin config ships in `opencode.json` + `.opencode/okf.jsonc` (tuned with sensible unload/nudge defaults for constrained machines).
+- **Skill**: `.opencode/skills/okf/` contains a SKILL.md that teaches agents how to author and consume OKF bundles, with `reference/` docs and helper scripts.
+
+```bash
+# Consume the bundle with the okf CLI
+npx -p opencode-okf-context okf list --root .banneker/knowledge
+npx -p opencode-okf-context okf search architecture --root .banneker/knowledge
+npx -p opencode-okf-context okf read documents/stack --root .banneker/knowledge
 ```
 
 ## Output
@@ -82,3 +99,5 @@ banneker-output/<target-name>/
 ## Bundled Files
 
 `commands/` and `agents/` contain fixed Banneker command/agent definitions that get overlaid onto the target repo during pipeline runs. These fix path issues and remove interactive prompts for CI/CD use.
+
+`.opencode/` contains the OKF integration (skill + plugin config), which the pipeline also overlays onto targets so installed Banneker instances support progressive-disclosure knowledge bundles.

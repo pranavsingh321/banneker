@@ -22,9 +22,35 @@ You work with real codebases that may be messy, incomplete, or undocumented. You
 - If a section has no findings, write "None detected" not a placeholder
 - Handle monorepos: if multiple package.json/Cargo.toml found, note this and analyze each sub-project
 
+## Resource Constraints
+
+This runs on a resource-constrained machine and a limited-context model. Reading files is the dominant cost. Apply the Large Repository Strategy below to bound how many files you open and how much context each read consumes. Do NOT exhaustively read every source file — sample intelligently and prioritize.
+
 ## Scan Strategy
 
 Execute analysis in 4 phases. Each phase builds on the previous.
+
+### Scale Assessment (before Phase 1)
+
+Estimate repository size FIRST so you know which thresholds to apply:
+
+```bash
+find . -type f \
+  -not -path "*/node_modules/*" \
+  -not -path "*/.git/*" \
+  -not -path "*/dist/*" \
+  -not -path "*/build/*" \
+  -not -path "*/coverage/*" \
+  -not -path "*/.next/*" \
+  -not -path "*/target/*" | wc -l
+```
+
+Use this to classify scale and apply the corresponding strategy:
+- **Small (< 200 files):** full analysis (current 4-phase flow).
+- **Medium (200–800 files):** use sampling + prioritization; cap direct file reads.
+- **Large (800+ files):** tiered analysis — deep-dive only core source directories, sample periphery, and lean on config/lockfile signals instead of reading code bodies.
+
+Record the file count in the output "Scale" section and in state.
 
 ### Phase 1: Project Metadata Extraction
 
@@ -247,6 +273,50 @@ Identify data flow patterns:
 - Sample endpoints (5-10 examples)
 - State management approach
 - Data flow patterns
+
+## Large Repository Strategy
+
+Apply this when `Scale Assessment` classifies the repo as Medium or Large. These rules bound context usage on constrained machines at the cost of some breadth.
+
+### Tiered Analysis
+
+Classify directories into tiers and allocate effort accordingly:
+
+- **Tier 1 — Core (deep-read):** top-level `src/`, `lib/`, `app/`, `packages/*/src`, entry points, the directories that define architecture. Read these files directly.
+- **Tier 2 — Support (sample):** tests, config, build scripts, route/controller subdirs. Read a representative sample (see below), do not read every file.
+- **Tier 3 — Periphery (signals only):** docs, examples, generated, vendor, migration files. Do NOT read bodies; rely on file names, directory listing, and config references.
+
+### File Sampling
+
+When a Tier 2 or Tier 3 directory has many similar files, sample representatives instead of reading all:
+
+- Select files that reveal the most structure: index/barrel files (`index.ts`, `mod.rs`, `__init__.py`), entry points, files with names like `types.ts`, `schema.*`, `routes.ts`, `store.ts`, `constants.ts`.
+- Pick the 1–2 most important files per directory (largest `src`-level file, most-connected file), not a random sample.
+- **Cap:** For Medium repos, read no more than ~25 source files directly. For Large repos, ~40 (concentrated in Tier 1). Beyond the cap, derive findings from lockfiles, manifests, configs, and directory structure.
+- Treat all sampled findings as representative; note in "Analysis Notes" that periphery files were sampled, not exhaustively read, when confidence is affected.
+
+### Prioritized Detection
+
+Read, in order, before any code body:
+
+1. Manifests & lockfiles (`package.json`, `Cargo.toml` + `Cargo.lock`, `pyproject.toml`, `go.mod`, `pom.xml`) — these alone reveal frameworks, dependencies, scripts, and monorepo layout.
+2. Build & config files (`tsconfig.json`, `Dockerfile`, `docker-compose.yml`, `.env.example`, CI workflow) — reveal tooling, infra, entry structure.
+3. Entry points (`index.*`, `main.*`, `server.*`, `manage.py`, `cmd/*/main.go`).
+4. Only then read sampled Tier 1 module bodies for architecture patterns (routing, state, data flow).
+
+If manifests already describe the stack, skip re-deriving it from code bodies (e.g., don't grep `app.get` when `package.json` scripts already show an Express server with route files — verify with one quick grep only).
+
+### Per-File Read Limits
+
+- Never Read a file over `500KB` (existing rule) — keep it.
+- For large single files under the cap, prefer targeted Grep to extract only relevant patterns (`app.use(`, `router.`, `export class`, `createContext`) over reading the whole file body.
+- When a directory listing shows many auto-generated files (e.g., `*.generated.*`, `*.min.js`, `dist`), skip reading them entirely.
+
+### Context Budget Guardrails
+
+- After each phase, check cumulative context. If Phase 3 or 4 risks exhausting the budget, stop deep-reading and fall back to signal-level analysis, preserving what you have in `.banneker/state/document-state.md` for resume.
+- Prefer writing partial findings to state progressively (per phase) rather than holding everything in memory until the end.
+- If sampling is degraded by budget pressure, reduce sample size before skipping phases — finishing all sections with thinner evidence beats a half-complete document.
 
 ## File Exclusion Rules
 
@@ -485,6 +555,8 @@ Analyzed by: Banneker Cartographer
 {List any areas that couldn't be analyzed: lack of documentation, unusual structure, encrypted files, etc.}
 {If no gaps: "None — comprehensive analysis completed."}
 
+**Sampling applied:** {small/medium/large strategy used; count of files read directly vs total; which tier-2/tier-3 areas were sampled rather than exhaustively read, if applicable}
+
 **Next steps for onboarding:**
 1. {Suggestion based on findings: read README, check .env.example, run setup script, etc.}
 2. {Suggestion}
@@ -509,6 +581,9 @@ For large codebases (1000+ files or analysis taking significant time), use state
 **Status:** In progress
 **Started:** {ISO 8601 timestamp}
 **Last updated:** {ISO 8601 timestamp}
+**Scale class:** {small/medium/large}
+**Files total:** {count}
+**Files read directly:** {count}
 
 ## Completed Phases
 
@@ -648,6 +723,7 @@ Analysis is successful when:
 - [x] All findings are specific to THIS codebase (no generic placeholders)
 - [x] File paths listed actually exist in the codebase
 - [x] Dependency versions match lockfiles/manifests
+- [x] Sampling strategy applied per scale class (small/medium/large) and documented in Analysis Notes
 - [x] State file cleaned up on success
 - [x] User has actionable onboarding steps
 

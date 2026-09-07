@@ -74,7 +74,8 @@ Banneker transforms structured discovery interviews into engineering plans, arch
 
 ### Export
 - **/banneker:feed** — Export to downstream frameworks
-  - 4 export formats: GSD (Get Shit Done), Platform Prompt, Generic Summary, Context Bundle
+  - 5 export formats: GSD (Get Shit Done), Platform Prompt, Generic Summary, Context Bundle, OKF Bundle
+  - OKF bundle is a progressive-disclosure knowledge bundle in `.banneker/knowledge/`
   - Framework-specific adapters for each format
   - All exports generated in single pass
 
@@ -127,8 +128,8 @@ For new projects (greenfield):
    - Results: index.html + section pages in .banneker/appendix/
 
 5. **/banneker:feed** — Export to downstream frameworks
-   - Generates framework-specific exports (GSD, platform prompts, etc.)
-   - Results: 4 export formats in .banneker/exports/
+   - Generates framework-specific exports (GSD, platform prompts, OKF bundle, etc.)
+   - Results: 5 export formats in .planning/, .banneker/exports/, and .banneker/knowledge/
 
 6. **/banneker:progress** — Check workflow status anytime
    - Shows what's complete, what's in progress, what's next

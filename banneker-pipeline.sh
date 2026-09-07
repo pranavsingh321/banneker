@@ -58,6 +58,15 @@ install_banneker() {
   if [[ -d "$SCRIPT_DIR/agents" ]]; then
     cp "$SCRIPT_DIR"/agents/banneker-*.md "$TARGET_DIR/.opencode/agents/"
   fi
+  if [[ -d "$SCRIPT_DIR/.opencode/skills" ]]; then
+    log "Overlaying OKF skill..."
+    mkdir -p "$TARGET_DIR/.opencode/skills"
+    cp -r "$SCRIPT_DIR/.opencode/skills/"* "$TARGET_DIR/.opencode/skills/"
+  fi
+  if [[ -f "$SCRIPT_DIR/.opencode/okf.jsonc" ]]; then
+    log "Overlaying OKF plugin config..."
+    cp "$SCRIPT_DIR/.opencode/okf.jsonc" "$TARGET_DIR/.opencode/okf.jsonc"
+  fi
 }
 
 run_step() {

@@ -1,6 +1,6 @@
 ---
 name: banneker-feed
-description: "Export Banneker planning artifacts into downstream framework formats. Produces GSD planning files (.planning/), platform prompt, generic summary, and context bundle. Run after /banneker:architect to transform documents into consumable exports."
+description: "Export Banneker planning artifacts into downstream framework formats. Produces GSD planning files (.planning/), platform prompt, generic summary, context bundle, and OKF knowledge bundle. Run after /banneker:architect to transform documents into consumable exports."
 ---
 
 # banneker-feed
@@ -85,9 +85,10 @@ Check for other format outputs:
 test -f .banneker/exports/platform-prompt.md && echo "platform-prompt.md: exists"
 test -f .banneker/exports/summary.md && echo "summary.md: exists"
 test -f .banneker/exports/context-bundle.md && echo "context-bundle.md: exists"
+test -f .banneker/knowledge/index.md && echo "knowledge/index.md: exists"
 ```
 
-If ALL 4 formats exist (GSD = 3 files, platform prompt = 1 file, summary = 1 file, context bundle = 1 file):
+If ALL 5 formats exist (GSD = 3 files, platform prompt = 1 file, summary = 1 file, context bundle = 1 file, OKF = index.md):
 1. Auto-overwrite: Delete existing exports (keep directories), delete state file if exists, proceed to Step 2. Display: "All export formats already generated. Overwriting."
 
 If SOME formats exist (but not all):
@@ -116,7 +117,7 @@ Create `.banneker/state/export-state.md`:
 
 status: in_progress
 started: [ISO date from `date -u +"%Y-%m-%dT%H:%M:%SZ"`]
-formats_requested: [gsd, platform_prompt, generic_summary, context_bundle]
+formats_requested: [gsd, platform_prompt, generic_summary, context_bundle, okf_bundle]
 formats_completed: []
 ```
 
@@ -133,7 +134,7 @@ task(
 ```
 
 Context to pass:
-- **Fresh start**: "Fresh start — no prior state. Generate all 4 formats: GSD, platform prompt, generic summary, context bundle."
+- **Fresh start**: "Fresh start — no prior state. Generate all 5 formats: GSD, platform prompt, generic summary, context bundle, OKF bundle."
 - **Resuming**: Include content of `.banneker/state/export-state.md` with: "Resume from the current state. Skip already-completed formats."
 - Also instruct agent to read `.banneker/survey.json`, detect available documents in `.banneker/documents/`, and reference `@config/framework-adapters.md`.
 
@@ -148,6 +149,7 @@ The exporter agent will:
 - Generate platform prompt to `.banneker/exports/platform-prompt.md`
 - Generate generic summary to `.banneker/exports/summary.md`
 - Generate context bundle to `.banneker/exports/context-bundle.md`
+- Generate OKF bundle to `.banneker/knowledge/` (index.md + concept files)
 - Write incremental updates to `.banneker/state/export-state.md` after each format
 - Delete state file on successful completion
 
@@ -237,11 +239,32 @@ Verify context-bundle.md contains survey data:
 grep -i "survey" .banneker/exports/context-bundle.md | head -5
 ```
 
+### Verify OKF Bundle output
+
+Check for the OKF knowledge bundle:
+
+```bash
+test -f .banneker/knowledge/index.md && echo "index.md: OK" || echo "index.md: MISSING"
+test -f .banneker/knowledge/log.md && echo "log.md: OK" || echo "log.md: MISSING"
+```
+
+Verify it contains concept files:
+
+```bash
+find .banneker/knowledge -name "*.md" -not -name "index.md" -not -name "log.md" | wc -l
+```
+
+Verify concepts carry OKF frontmatter (type/title/description):
+
+```bash
+grep -rl "type:" .banneker/knowledge | head -5
+```
+
 ### Display Results
 
 Determine completion status based on verified outputs:
 
-**Full export (all 4 formats complete):**
+**Full export (all 5 formats complete):**
 
 Display completion message:
 ```
@@ -263,12 +286,16 @@ Generic Summary (.banneker/exports/):
 Context Bundle (.banneker/exports/):
   - context-bundle.md ([size])
 
+OKF Bundle (.banneker/knowledge/):
+  - index.md + [N] concept files
+
 All export formats generated successfully.
 
 Next steps:
   - Review GSD files in .planning/ for project planning
   - Use platform-prompt.md for AI platform context
   - Use context-bundle.md for LLM agent context
+  - Consume .banneker/knowledge/ progressively via okf_list / okf_read (progressive disclosure)
 ```
 
 **Partial export (some formats failed):**
@@ -305,6 +332,7 @@ Skipped formats:
   - Platform Prompt (requires documents)
   - Generic Summary (requires documents)
   - Context Bundle (limited without documents)
+  - OKF Bundle (limited without documents)
 
 The GSD format was successfully generated from survey data.
 
@@ -318,7 +346,7 @@ Next step:
 
 ## Step 5: Clean Up State (on completion)
 
-If all 4 formats were verified successfully:
+If all 5 formats were verified successfully:
 
 ```bash
 rm -f .banneker/state/export-state.md
@@ -326,7 +354,7 @@ rm -f .banneker/state/export-state.md
 
 Display final summary with file paths and sizes:
 ```
-Export files saved to .planning/ and .banneker/exports/
+Export files saved to .planning/, .banneker/exports/, and .banneker/knowledge/
 
 GSD Format:
   - .planning/PROJECT.md
@@ -337,6 +365,9 @@ Other Formats:
   - .banneker/exports/platform-prompt.md
   - .banneker/exports/summary.md
   - .banneker/exports/context-bundle.md
+
+OKF Bundle:
+  - .banneker/knowledge/ (index.md + concept files)
 
 Use these exports to feed downstream planning frameworks and AI platforms.
 ```
@@ -364,3 +395,4 @@ If any format failed:
 - **REQ-EXPORT-002**: Platform prompt verification (under 4,000 words)
 - **REQ-EXPORT-003**: Generic summary verification (source comments proving concatenation)
 - **REQ-EXPORT-004**: Context bundle verification (survey data inclusion)
+- **REQ-EXPORT-005**: OKF bundle verification (index.md + concept files with OKF frontmatter)

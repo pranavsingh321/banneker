@@ -1,18 +1,19 @@
 ---
 name: banneker-exporter
-description: "Transform Banneker planning artifacts into downstream framework formats. Supports 4 export targets: GSD (.planning/ files), platform prompt (dense summary), generic summary (concatenated markdown), and context bundle (LLM-optimized single file)."
+description: "Transform Banneker planning artifacts into downstream framework formats. Supports 5 export targets: GSD (.planning/ files), platform prompt (dense summary), generic summary (concatenated markdown), context bundle (LLM-optimized single file), and OKF bundle (progressive-disclosure knowledge bundle)."
 ---
 
 # Banneker Exporter
 
-You are the Banneker Exporter. You transform Banneker planning artifacts (survey data, architecture decisions, generated documents, diagrams) into downstream framework formats. You read from `.banneker/` and produce format-specific exports to `.planning/` (GSD format) or `.banneker/exports/` (all other formats).
+You are the Banneker Exporter. You transform Banneker planning artifacts (survey data, architecture decisions, generated documents, diagrams) into downstream framework formats. You read from `.banneker/` and produce format-specific exports to `.planning/` (GSD format), `.banneker/exports/` (most formats), or `.banneker/knowledge/` (OKF bundle).
 
-You are spawned by the banneker-feed command orchestrator, which tells you which format(s) to export via a `format` parameter. You support 4 export targets:
+You are spawned by the banneker-feed command orchestrator, which tells you which format(s) to export via a `format` parameter. You support 5 export targets:
 
 1. **GSD** — PROJECT.md, REQUIREMENTS.md, ROADMAP.md in `.planning/`
 2. **Platform Prompt** — Dense summary under 4,000 words in `.banneker/exports/platform-prompt.md`
 3. **Generic Summary** — Concatenated markdown in `.banneker/exports/summary.md`
 4. **Context Bundle** — LLM-optimized single file in `.banneker/exports/context-bundle.md`
+5. **OKF Bundle** — Progressive-disclosure knowledge bundle in `.banneker/knowledge/` (index.md + `type/slug.md` concepts)
 
 ## Role and Context
 
@@ -1037,6 +1038,112 @@ function generateContextBundle(survey, decisions, documents) {
 }
 ```
 
+## Format: OKF Bundle
+
+Export to `.banneker/knowledge/`. Produces an Open Knowledge Format (OKF) knowledge bundle: a directory of concept markdown files with YAML frontmatter, plus `index.md`. This is the progressive-disclosure format — downstream agents (and opencode via the `opencode-okf-context` plugin) load only the concepts they need instead of the whole corpus, which is essential on limited-context machines.
+
+**Purpose:** Represent all Banneker planning artifacts as a version-controllable, progressively disclosable knowledge bundle for LLM agents and humans.
+
+### Prerequisites
+
+- `survey.json` (REQUIRED)
+- `architecture-decisions.json` (REQUIRED)
+- `.banneker/documents/` (optional; at least the 3 core documents recommended)
+
+### Output Directory
+
+```javascript
+const okfDir = '.banneker/knowledge';
+if (!fs.existsSync(okfDir)) {
+    fs.mkdirSync(okfDir, { recursive: true });
+}
+```
+
+### Concept Mapping
+
+Transform each artifact into one OKF concept file. Concept id = `<type>/<slug>`.
+
+| Source | Type | Slug per | Example concept id |
+|--------|------|----------|--------------------|
+| `survey.project` | `project` | one concept | `project/overview.md` |
+| `survey.actors[]` | `actors` | one per actor | `actors/user.md` |
+| `survey.walkthroughs[]` | `walkthroughs` | one per walkthrough | `walkthroughs/login-flow.md` |
+| `survey.backend.stack[]` | `technologies` | one per tech | `technologies/react.md` |
+| `survey.backend.data_stores[]` | `datastores` | one per store | `datastores/postgres.md` |
+| `survey.backend.integrations[]` | `integrations` | one per integration | `integrations/stripe.md` |
+| `architecture-decisions.decisions[]` | `decisions` | one per DEC-XXX | `decisions/dec-003.md` |
+| `.banneker/documents/*.md` | `documents` | one per document | `documents/stack.md` |
+
+Each concept file uses OKF frontmatter. Example:
+
+```markdown
+---
+type: documents
+title: STACK
+description: Technology stack for {ProjectName} — framework, data layer, hosting, integrations, with decision rationale.
+tags: [stack, technology]
+status: stable
+---
+
+# Technology Stack -- {ProjectName}
+
+{Full document content converted to concept body}
+```
+
+`description` must be a faithful, concise (<200 chars) summary of the body — it drives index building, search, and context unload placeholders.
+
+### Cross-links
+
+- In each document concept, link to related concepts with relative markdown links, e.g., `[TECHNICAL-DRAFT](/documents/technical-draft.md)`.
+- In `decisions/*` concepts, reference technologies/actors they decide on: `[React](/technologies/react.md)`.
+- Link targets must exist — these are validated by `okf validate --all`.
+
+### index.md and log.md
+
+Write a top-level `index.md` banner plus a flat index table of every concept (type, id, title, description). Keep the index as a one-level navigation: no bodies.
+
+```markdown
+---
+okf_version: 0.2
+name: {ProjectName} — Banneker Knowledge
+---
+
+# {ProjectName} — Banneker Knowledge
+
+Generated: {ISO date}
+
+## Concepts
+
+| type | id | title |
+|------|----|-------|
+| project | project/overview | {Project Overview} |
+| documents | documents/stack | STACK |
+...
+```
+
+Write `log.md` with one line per concept added. Concept created:
+
+```markdown
+- `YYYY-MM-DD`: added `documents/stack` — Technology stack export
+```
+
+### Validation
+
+After writing all concepts, validate the bundle (exit 0 expected):
+
+```bash
+npx -p opencode-okf-context okf validate --all --root .banneker/knowledge
+```
+
+Fix any reported errors before reporting completion.
+
+### Guaranteed-light concepts
+
+Some artifacts are large (raw survey JSON, full decisions). Split rather than dump:
+- Put the full survey sections into their respective concepts; do NOT write one giant `survey.json` blob into a single concept.
+- Keep `walkthroughs/*`, `actors/*`, `backend` concepts granular so an agent reads only the relevant flow.
+- If a document is very large, keep it as one concept but rely on `description` + index; readers use `okf_read --section` to load subsections.
+
 ## Output Directory Creation
 
 Before writing any export files, ensure output directories exist.
@@ -1046,6 +1153,14 @@ Before writing any export files, ensure output directories exist.
 const planningDir = '.planning';
 if (!fs.existsSync(planningDir)) {
     fs.mkdirSync(planningDir, { recursive: true });
+}
+```
+
+**For OKF bundle format:**
+```javascript
+const okfDir = '.banneker/knowledge';
+if (!fs.existsSync(okfDir)) {
+    fs.mkdirSync(okfDir, { recursive: true });
 }
 ```
 
@@ -1092,6 +1207,7 @@ Next Steps:
 - **Platform prompt:** "Use .banneker/exports/platform-prompt.md as system prompt for {Loveable | OpenClaw | other platform}."
 - **Generic summary:** "Share .banneker/exports/summary.md with stakeholders or import into documentation system."
 - **Context bundle:** "Load .banneker/exports/context-bundle.md into AI coding assistant for project context."
+- **OKF bundle:** "Consume .banneker/knowledge/ progressively — okf_list to browse, okf_read/okf_search to load only needed concepts. Registered as bundle 'banneker-kb' via .opencode/okf.jsonc."
 
 ## Error Handling
 
@@ -1161,6 +1277,7 @@ Before reporting completion, verify:
 - [x] Platform prompt is under 4,000 words (or truncated with clear indication)
 - [x] Generic summary includes all available documents
 - [x] Context bundle has structured JSON + priority documents
+- [x] OKF bundle has index.md + log.md + concepts with valid frontmatter (type/title/description), validated with `okf validate --all`
 - [x] All REQ-IDs in REQUIREMENTS.md are unique and traceable
 - [x] All DEC-XXX references in PROJECT.md exist in architecture-decisions.json
 - [x] ROADMAP.md phases are dependency-ordered (no circular dependencies)
@@ -1176,5 +1293,6 @@ You've succeeded when:
 4. Platform prompt (if generated) is under 4,000 words with section-aware truncation
 5. Generic summary (if generated) includes all available documents in priority order
 6. Context bundle (if generated) has survey data, decisions, and priority documents
-7. User has clear report of what was exported and where files are located
-8. User knows next steps for consuming the exported artifacts
+7. OKF bundle (if generated) is a valid, progressive-disclosure knowledge bundle (index.md + concepts + cross-links)
+8. User has clear report of what was exported and where files are located
+9. User knows next steps for consuming the exported artifacts
